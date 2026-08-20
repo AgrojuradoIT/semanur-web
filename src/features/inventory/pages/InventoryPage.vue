@@ -1,67 +1,110 @@
 <template>
   <div class="table-container">
-    <div class="table-header" style="flex-wrap: wrap; gap: 16px">
-      <div style="display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap">
-        <h3 class="table-title">GESTION DE INVENTARIO</h3>
-        <div class="filter-chips">
-          <button
-            v-for="chip in categoryChips"
-            :key="chip"
-            class="chip"
-            :class="{ active: selectedCategory === chip }"
-            @click="selectedCategory = chip"
-          >
-            {{ chip }}
+    <!-- Barra Superior: Controles a la izquierda y Tarjetas KPI a la derecha -->
+    <div class="table-header inventory-top-bar">
+      <!-- Columna Izquierda: Título/Categorías y Búsqueda/Acciones -->
+      <div class="inventory-controls-col">
+        <!-- Fila 1: Título y Categorías -->
+        <div class="inventory-title-row">
+          <h3 class="table-title">GESTION DE INVENTARIO</h3>
+          <div class="filter-chips">
+            <button
+              v-for="chip in categoryChips"
+              :key="chip"
+              class="chip"
+              :class="{ active: selectedCategory === chip }"
+              @click="selectedCategory = chip"
+            >
+              {{ chip }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Fila 2: Búsqueda y Botones de Acción -->
+        <div class="table-actions" style="flex-wrap: wrap">
+          <div class="table-search">
+            <span class="material-icons-round">search</span>
+            <input
+              v-model="search"
+              type="text"
+              placeholder="Buscar por nombre o SKU..."
+              @keyup.enter="onSearchEnter"
+            />
+          </div>
+          <button v-if="canManageInventory" class="btn btn-secondary btn-sm" @click="openCsvModal">
+            <span class="material-icons-round" style="font-size: 18px">upload_file</span>
+            IMPORTAR CSV
+          </button>
+          <button v-if="canManageMovements" class="btn btn-secondary btn-sm" @click="openMovementModal">
+            <span class="material-icons-round" style="font-size: 18px">swap_horiz</span>
+            MOVIMIENTO
+          </button>
+          <button v-if="canManageInventory" class="btn btn-primary btn-sm" @click="openProductModal()">
+            <span class="material-icons-round" style="font-size: 18px">add_circle</span>
+            NUEVO PRODUCTO
           </button>
         </div>
       </div>
 
-      <div class="table-actions" style="flex-wrap: wrap">
-        <div class="table-search">
-          <span class="material-icons-round">search</span>
-          <input
-            v-model="search"
-            type="text"
-            placeholder="Buscar por nombre o SKU..."
-            @keyup.enter="onSearchEnter"
-          />
+      <!-- Columna Derecha: Tarjetas KPI Compactas Apiladas -->
+      <div class="inventory-kpis-col" v-if="metrics">
+        <!-- Tarjeta 1: Total Productos -->
+        <div class="inv-kpi-card inv-kpi-card--primary">
+          <div class="inv-kpi-glow"></div>
+          <div class="inv-kpi-icon-box inv-kpi-icon-box--primary">
+            <span class="material-icons-round">inventory_2</span>
+          </div>
+          <div class="inv-kpi-info">
+            <div class="inv-kpi-label-row">
+              <span class="inv-kpi-label">Total Productos</span>
+              <span class="inv-kpi-dot-tag inv-kpi-dot-tag--primary">
+                <span class="inv-kpi-pulse-dot"></span>
+                Activo
+              </span>
+            </div>
+            <div class="inv-kpi-value-row">
+              <span class="inv-kpi-num">{{ animatedTotalProducts }}</span>
+              <span class="inv-kpi-unit">ítems</span>
+            </div>
+          </div>
         </div>
-        <button v-if="canManageInventory" class="btn btn-secondary btn-sm" @click="openCsvModal">
-          <span class="material-icons-round" style="font-size: 18px">upload_file</span>
-          IMPORTAR CSV
-        </button>
-        <button v-if="canManageMovements" class="btn btn-secondary btn-sm" @click="openMovementModal">
-          <span class="material-icons-round" style="font-size: 18px">swap_horiz</span>
-          MOVIMIENTO
-        </button>
-        <button v-if="canManageInventory" class="btn btn-primary btn-sm" @click="openProductModal()">
-          <span class="material-icons-round" style="font-size: 18px">add_circle</span>
-          NUEVO PRODUCTO
-        </button>
-      </div>
-    </div>
 
-    <!-- Métricas -->
-    <div class="metrics-row" v-if="metrics">
-      <div class="metric-card">
-        <span class="material-icons-round metric-icon">inventory_2</span>
-        <div class="metric-info">
-          <span class="metric-value">{{ metrics.total_products }}</span>
-          <span class="metric-label">Total Productos</span>
-        </div>
-      </div>
-      <div class="metric-card" :class="{ 'metric-danger': metrics.low_stock > 0 }">
-        <span class="material-icons-round metric-icon">warning</span>
-        <div class="metric-info">
-          <span class="metric-value">{{ metrics.low_stock }}</span>
-          <span class="metric-label">Stock Bajo Alerta</span>
-        </div>
-      </div>
-      <div class="metric-card">
-        <span class="material-icons-round metric-icon">payments</span>
-        <div class="metric-info">
-          <span class="metric-value">{{ formatCurrencyCO(metrics.total_value) }}</span>
-          <span class="metric-label">Valor Inventario</span>
+        <!-- Tarjeta 2: Stock Bajo Alerta -->
+        <div 
+          class="inv-kpi-card" 
+          :class="metrics.low_stock > 0 ? 'inv-kpi-card--danger' : 'inv-kpi-card--success'"
+        >
+          <div class="inv-kpi-glow"></div>
+          <div 
+            class="inv-kpi-icon-box"
+            :class="metrics.low_stock > 0 ? 'inv-kpi-icon-box--danger' : 'inv-kpi-icon-box--success'"
+          >
+            <span class="material-icons-round">
+              {{ metrics.low_stock > 0 ? 'warning' : 'verified' }}
+            </span>
+            <span v-if="metrics.low_stock > 0" class="inv-kpi-radar-ring"></span>
+          </div>
+          <div class="inv-kpi-info">
+            <div class="inv-kpi-label-row">
+              <span class="inv-kpi-label">Stock Bajo Alerta</span>
+              <span 
+                class="inv-kpi-dot-tag"
+                :class="metrics.low_stock > 0 ? 'inv-kpi-dot-tag--danger' : 'inv-kpi-dot-tag--success'"
+              >
+                <span class="inv-kpi-pulse-dot" :class="{ 'pulse-active': metrics.low_stock > 0 }"></span>
+                {{ metrics.low_stock > 0 ? 'Alerta' : 'Óptimo' }}
+              </span>
+            </div>
+            <div class="inv-kpi-value-row">
+              <span 
+                class="inv-kpi-num"
+                :class="metrics.low_stock > 0 ? 'text-danger-glow' : 'text-success-glow'"
+              >
+                {{ animatedLowStock }}
+              </span>
+              <span class="inv-kpi-unit">artículos</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -535,11 +578,14 @@
 
         <!-- Recent Movements -->
         <div class="pd-movements" v-if="productMovements.length > 0">
-          <h3 class="pd-section-title">
-            <span class="material-icons-round" style="font-size: 16px;">history</span>
-            Movimientos Recientes
-          </h3>
-          <div class="pd-movements-table">
+          <div class="pd-movements-header">
+            <h3 class="pd-section-title" style="margin-bottom: 0;">
+              <span class="material-icons-round" style="font-size: 16px;">history</span>
+              Movimientos Recientes
+            </h3>
+            <span class="pd-movements-count">{{ productMovements.length }} {{ productMovements.length === 1 ? 'registro' : 'registros' }}</span>
+          </div>
+          <div class="pd-movements-table" :class="{ 'pd-movements-table--expanded': showAllMovements }">
             <table>
               <thead>
                 <tr>
@@ -549,15 +595,33 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(mov, i) in productMovements.slice(0, 5)" :key="i">
+                <tr v-for="(mov, i) in (showAllMovements ? productMovements : productMovements.slice(0, 5))" :key="i">
                   <td>{{ formatMovDate(mov.created_at || mov.transaccion_fecha) }}</td>
-                  <td>{{ mov.transaccion_tipo || '—' }}</td>
+                  <td>
+                    <span class="pd-mov-type-tag" :class="mov.transaccion_tipo === 'ingreso' ? 'tag-ingreso' : 'tag-salida'">
+                      {{ mov.transaccion_tipo || '—' }}
+                    </span>
+                  </td>
                   <td style="text-align: right;" :class="mov.transaccion_tipo === 'ingreso' ? 'pd-mov-in' : 'pd-mov-out'">
                     {{ mov.transaccion_tipo === 'ingreso' ? '+' : '-' }}{{ mov.transaccion_cantidad }}
                   </td>
                 </tr>
               </tbody>
             </table>
+          </div>
+
+          <!-- Botón Ver más / Ver menos -->
+          <div v-if="productMovements.length > 5" class="pd-movements-toggle-wrap">
+            <button 
+              type="button" 
+              class="pd-movements-toggle-btn"
+              @click="showAllMovements = !showAllMovements"
+            >
+              <span class="material-icons-round">
+                {{ showAllMovements ? 'expand_less' : 'expand_more' }}
+              </span>
+              {{ showAllMovements ? 'Ver menos' : `Ver todos (${productMovements.length})` }}
+            </button>
           </div>
         </div>
 
@@ -653,6 +717,46 @@ const totalPages = ref(1);
 const totalItems = ref(0);
 const metrics = ref(null);
 
+function useAnimatedNumber(sourceRef) {
+  const displayValue = ref(0);
+  let animationFrame = null;
+
+  watch(
+    sourceRef,
+    (newVal) => {
+      const target = Number(newVal || 0);
+      const start = Number(displayValue.value || 0);
+      const startTime = performance.now();
+      const duration = 750;
+
+      if (animationFrame) cancelAnimationFrame(animationFrame);
+
+      function step(now) {
+        const elapsed = now - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        displayValue.value = Math.round(start + (target - start) * ease);
+
+        if (progress < 1) {
+          animationFrame = requestAnimationFrame(step);
+        } else {
+          displayValue.value = target;
+        }
+      }
+
+      animationFrame = requestAnimationFrame(step);
+    },
+    { immediate: true }
+  );
+
+  return displayValue;
+}
+
+const totalProductsSource = computed(() => metrics.value?.total_products ?? 0);
+const lowStockSource = computed(() => metrics.value?.low_stock ?? 0);
+const animatedTotalProducts = useAnimatedNumber(totalProductsSource);
+const animatedLowStock = useAnimatedNumber(lowStockSource);
+
 // Categorias dummy para el formulario. Lo ideal sería un endpoint, pero se simplifica con quemados o sacados de props.
 const categories = ref([
   { categoria_id: 1, nombre: 'Repuestos' },
@@ -670,6 +774,7 @@ const showCsvModal = ref(false);
 const showDetailModal = ref(false);
 const selectedProduct = ref(null);
 const productMovements = ref([]);
+const showAllMovements = ref(false);
 const empleados = ref([]);
 const saving = ref(false);
 const editingProductId = ref(null);
@@ -1069,6 +1174,7 @@ async function goToProduct(product) {
   selectedProduct.value = product;
   showDetailModal.value = true;
   productMovements.value = [];
+  showAllMovements.value = false;
   try {
     const id = normalizeId(product);
     const { data } = await http.get('/movimientos', { params: { producto_id: id } });
@@ -1082,6 +1188,7 @@ function closeDetailModal() {
   showDetailModal.value = false;
   selectedProduct.value = null;
   productMovements.value = [];
+  showAllMovements.value = false;
 }
 
 function normalizeId(product) {
@@ -1213,48 +1320,338 @@ function formatMovDate(dateStr) {
   align-items: center;
 }
 
-/* Metrics cards */
-.metrics-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: var(--sp-md);
-  margin-bottom: var(--sp-md);
-}
-.metric-card {
+/* Inventory Top Bar Layout */
+.inventory-top-bar {
   display: flex;
   align-items: center;
-  gap: var(--sp-sm);
-  background: var(--surface);
-  border: 1px solid var(--surface-2);
-  border-radius: var(--radius-md);
-  padding: var(--sp-md);
+  justify-content: space-between;
+  padding: 18px 20px 14px 20px;
+  gap: var(--sp-lg);
+  margin-bottom: 0;
+  flex-wrap: wrap;
 }
-.metric-card.metric-danger .metric-icon {
-  color: var(--danger);
-}
-.metric-card.metric-danger .metric-value {
-  color: var(--danger);
-}
-.metric-icon {
-  font-size: 28px;
-  color: var(--primary);
-  opacity: 0.8;
-}
-.metric-info {
+
+.inventory-controls-col {
   display: flex;
   flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 320px;
 }
-.metric-value {
-  font-size: 1.25rem;
+
+.inventory-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-md);
+  flex-wrap: wrap;
+}
+
+.inventory-kpis-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 230px;
+  margin-top: 2px;
+  margin-right: 4px;
+}
+
+.inv-kpi-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  background: linear-gradient(145deg, rgba(30, 30, 30, 0.88) 0%, rgba(20, 20, 20, 0.96) 100%);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+  animation: cardFadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  width: 100%;
+}
+
+.inv-kpi-card:hover {
+  transform: translateY(-2px);
+}
+
+.inv-kpi-glow {
+  position: absolute;
+  top: -50%;
+  right: -20%;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(20px);
+  opacity: 0.15;
+  transition: opacity 0.3s ease;
+}
+
+.inv-kpi-card:hover .inv-kpi-glow {
+  opacity: 0.3;
+}
+
+/* Primary Card (Total Productos) */
+.inv-kpi-card--primary {
+  border-color: rgba(255, 214, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.inv-kpi-card--primary .inv-kpi-glow {
+  background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+}
+.inv-kpi-card--primary:hover {
+  border-color: rgba(255, 214, 0, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), 0 0 14px rgba(255, 214, 0, 0.12);
+}
+
+/* Danger Card (Stock Bajo Alerta con Alertas) */
+.inv-kpi-card--danger {
+  border-color: rgba(244, 67, 54, 0.3);
+  background: linear-gradient(145deg, rgba(38, 22, 22, 0.9) 0%, rgba(24, 15, 15, 0.97) 100%);
+  box-shadow: 0 2px 8px rgba(244, 67, 54, 0.1);
+  animation: cardFadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.05s backwards;
+}
+.inv-kpi-card--danger .inv-kpi-glow {
+  background: radial-gradient(circle, var(--danger) 0%, transparent 70%);
+}
+.inv-kpi-card--danger:hover {
+  border-color: rgba(244, 67, 54, 0.6);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), 0 0 16px rgba(244, 67, 54, 0.2);
+}
+
+/* Success Card (Stock Bajo Alerta en Cero) */
+.inv-kpi-card--success {
+  border-color: rgba(76, 175, 80, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  animation: cardFadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) 0.05s backwards;
+}
+.inv-kpi-card--success .inv-kpi-glow {
+  background: radial-gradient(circle, var(--success) 0%, transparent 70%);
+}
+.inv-kpi-card--success:hover {
+  border-color: rgba(76, 175, 80, 0.45);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), 0 0 14px rgba(76, 175, 80, 0.14);
+}
+
+/* Icon Box */
+.inv-kpi-icon-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.inv-kpi-card:hover .inv-kpi-icon-box {
+  transform: scale(1.08);
+}
+
+.inv-kpi-icon-box .material-icons-round {
+  font-size: 17px;
+}
+
+.inv-kpi-icon-box--primary {
+  background: rgba(255, 214, 0, 0.12);
+  color: var(--primary);
+  border: 1px solid rgba(255, 214, 0, 0.25);
+}
+
+.inv-kpi-icon-box--danger {
+  background: rgba(244, 67, 54, 0.16);
+  color: #ff6b6b;
+  border: 1px solid rgba(244, 67, 54, 0.35);
+}
+
+.inv-kpi-icon-box--success {
+  background: rgba(76, 175, 80, 0.12);
+  color: #69db7c;
+  border: 1px solid rgba(76, 175, 80, 0.25);
+}
+
+/* Radar Pulse on Alert */
+.inv-kpi-radar-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 2px solid rgba(244, 67, 54, 0.7);
+  pointer-events: none;
+  animation: radarPulse 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+@keyframes radarPulse {
+  0% {
+    transform: scale(0.95);
+    opacity: 0.85;
+  }
+  65% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* Info Column */
+.inv-kpi-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.inv-kpi-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.inv-kpi-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--text-gray);
+  white-space: nowrap;
+}
+
+/* Tags */
+.inv-kpi-dot-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 4px;
+  border-radius: 999px;
+  font-size: 0.58rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+  line-height: 1.1;
+}
+
+.inv-kpi-dot-tag--primary {
+  background: rgba(255, 214, 0, 0.1);
+  color: var(--primary);
+  border: 1px solid rgba(255, 214, 0, 0.2);
+}
+
+.inv-kpi-dot-tag--danger {
+  background: rgba(244, 67, 54, 0.15);
+  color: #ff8787;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.inv-kpi-dot-tag--success {
+  background: rgba(76, 175, 80, 0.12);
+  color: #8ce99a;
+  border: 1px solid rgba(76, 175, 80, 0.25);
+}
+
+.inv-kpi-pulse-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.inv-kpi-pulse-dot.pulse-active {
+  animation: dotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.6);
+    opacity: 0.35;
+  }
+}
+
+.inv-kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.inv-kpi-num {
+  font-size: 1.18rem;
+  font-weight: 800;
   color: var(--text-main);
   font-family: 'Oswald', sans-serif;
+  line-height: 1.1;
+  letter-spacing: -0.2px;
+  transition: color var(--transition-fast);
 }
-.metric-label {
-  font-size: 0.7rem;
-  color: var(--text-gray);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+
+.inv-kpi-unit {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.text-danger-glow {
+  color: #ff6b6b;
+  text-shadow: 0 0 10px rgba(244, 67, 54, 0.35);
+}
+
+.text-success-glow {
+  color: #69db7c;
+  text-shadow: 0 0 10px rgba(76, 175, 80, 0.25);
+}
+
+@keyframes cardFadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 960px) {
+  .inventory-top-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .inventory-kpis-col {
+    flex-direction: row;
+    width: 100%;
+  }
+  .inventory-kpis-col .inv-kpi-card {
+    flex: 1;
+  }
+}
+
+/* Light mode overrides */
+:root.light-mode .inv-kpi-card {
+  background: linear-gradient(145deg, #ffffff 0%, #f8f9fa 100%);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+:root.light-mode .inv-kpi-card--primary {
+  border-color: rgba(255, 214, 0, 0.4);
+}
+
+:root.light-mode .inv-kpi-card--danger {
+  background: linear-gradient(145deg, #fff5f5 0%, #ffe3e3 100%);
+  border-color: rgba(244, 67, 54, 0.35);
 }
 
 /* Modal Container */
@@ -1479,10 +1876,30 @@ function formatMovDate(dateStr) {
   margin-bottom: 10px;
 }
 
+.pd-movements-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pd-movements-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
 .pd-movements-table {
   border: 1px solid var(--surface-2);
   border-radius: var(--radius-sm);
   overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.pd-movements-table--expanded {
+  max-height: 220px;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 .pd-movements-table table {
@@ -1494,6 +1911,9 @@ function formatMovDate(dateStr) {
 
 .pd-movements-table thead {
   background: var(--bg-dark);
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .pd-movements-table th {
@@ -1516,12 +1936,64 @@ function formatMovDate(dateStr) {
   background: var(--primary-10);
 }
 
+.pd-mov-type-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  text-transform: capitalize;
+  font-weight: 600;
+}
+
+.pd-mov-type-tag.tag-ingreso {
+  background: rgba(76, 175, 80, 0.12);
+  color: var(--success);
+}
+
+.pd-mov-type-tag.tag-salida {
+  background: rgba(244, 67, 54, 0.12);
+  color: #ff6b6b;
+}
+
 .pd-mov-in {
   color: var(--success) !important;
+  font-weight: 600;
 }
 
 .pd-mov-out {
   color: var(--danger) !important;
+  font-weight: 600;
+}
+
+.pd-movements-toggle-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.pd-movements-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--surface-3);
+  color: var(--primary);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pd-movements-toggle-btn:hover {
+  background: var(--primary-10);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+
+.pd-movements-toggle-btn .material-icons-round {
+  font-size: 16px;
 }
 
 /* Actions */

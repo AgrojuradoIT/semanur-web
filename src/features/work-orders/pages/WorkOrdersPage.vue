@@ -524,13 +524,34 @@ const statusFilters = [
   { value: 'Cerrada', label: 'Cerradas' },
 ];
 
-onMounted(async () => {
-  await loadData();
+function handleQueryRouting() {
+  const orderId = route.query.id || route.query.orden_id;
+  const searchTxt = route.query.search;
+
+  if (searchTxt) {
+    search.value = String(searchTxt);
+  }
+
+  if (orderId && orders.value?.length) {
+    const order = orders.value.find((o) => String(o.orden_trabajo_id || o.id) === String(orderId));
+    if (order) {
+      openDetailModal(order);
+    }
+  }
 
   if (route.query.action === 'new' && route.query.vehiculo_id) {
     showCreate.value = true;
     createForm.value.vehiculo_id = route.query.vehiculo_id;
   }
+}
+
+onMounted(async () => {
+  await loadData();
+  handleQueryRouting();
+});
+
+watch(() => route.query, () => {
+  handleQueryRouting();
 });
 
 watch(refreshTrigger, loadData);

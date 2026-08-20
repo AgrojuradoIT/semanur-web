@@ -74,9 +74,35 @@
           </div>
         </div>
 
-        <div class="export-section" style="margin-top: 28px;">
+        <!-- 2. Filtros Adicionales -->
+        <div class="export-section" style="margin-top: 24px;">
+          <h4 class="section-title">2. Filtros de Combustible y Destino</h4>
+          <div class="modal-filters-grid">
+            <div class="input-group">
+              <label>Tipo de Combustible</label>
+              <select v-model="selectedFuelType" class="input">
+                <option value="todos">Todos los combustibles</option>
+                <option value="gasolina">Gasolina</option>
+                <option value="acpm">ACPM</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Tipo de Destino</label>
+              <select v-model="selectedDestType" class="input">
+                <option value="todos">Todos los destinos</option>
+                <option value="vehiculo">Vehículo</option>
+                <option value="maquinaria">Maquinaria</option>
+                <option value="equipo_menor">Equipo Menor</option>
+                <option value="empleado">Empleado</option>
+                <option value="tercero">Tercero</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="export-section" style="margin-top: 24px;">
           <div class="section-header-row">
-            <h4 class="section-title">2. Columnas a Exportar</h4>
+            <h4 class="section-title">3. Columnas a Exportar</h4>
             <div class="column-actions">
               <button class="btn-link" @click="selectAll">Seleccionar Todas</button>
               <span class="separator">|</span>
@@ -111,7 +137,10 @@ import { exportFuelRecordsToExcel } from '../api/fuelExportService';
 
 const props = defineProps({
   initialDesde: { type: String, default: '' },
-  initialHasta: { type: String, default: '' }
+  initialHasta: { type: String, default: '' },
+  initialTipoCombustible: { type: String, default: 'todos' },
+  initialTipoDestino: { type: String, default: 'todos' },
+  initialSearch: { type: String, default: '' },
 });
 
 const emit = defineEmits(['close']);
@@ -120,6 +149,8 @@ const emit = defineEmits(['close']);
 const fechaDesde = ref('');
 const fechaHasta = ref('');
 const selectedPeriod = ref('all');
+const selectedFuelType = ref('todos');
+const selectedDestType = ref('todos');
 const exporting = ref(false);
 
 // Control del Calendario
@@ -140,6 +171,8 @@ const availableColumns = [
   { key: 'tipo_destino', label: 'Tipo Destino' },
   { key: 'destino', label: 'Destino (Placa/Nombre)' },
   { key: 'galones', label: 'Galones' },
+  { key: 'estacion_servicio', label: 'Estación de Servicio' },
+  { key: 'valor_total', label: 'Valor Total ($)' },
   { key: 'horometro', label: 'Horómetro' },
   { key: 'kilometraje', label: 'Kilometraje' },
   { key: 'labor', label: 'Labor / Destino' },
@@ -150,13 +183,15 @@ const availableColumns = [
 
 const selectedColumns = ref([
   'fecha', 'tipo_combustible', 'tipo_destino', 'destino', 'galones',
-  'horometro', 'kilometraje', 'labor', 'responsable', 'registrado_por'
+  'estacion_servicio', 'valor_total', 'horometro', 'kilometraje', 'labor', 'responsable', 'registrado_por'
 ]);
 
 // Montaje inicial
 onMounted(() => {
   fechaDesde.value = props.initialDesde;
   fechaHasta.value = props.initialHasta;
+  selectedFuelType.value = props.initialTipoCombustible || 'todos';
+  selectedDestType.value = props.initialTipoDestino || 'todos';
   
   if (props.initialDesde) {
     viewDate.value = new Date(props.initialDesde);
@@ -347,8 +382,10 @@ function setPeriod(period) {
     fechaHasta.value = formatDateForInput(today);
     viewDate.value = new Date(today);
   } else if (period === 'week') {
-    const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay());
+    const d = new Date(today);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const startOfWeek = new Date(d.setDate(diff));
     fechaDesde.value = formatDateForInput(startOfWeek);
     fechaHasta.value = formatDateForInput(today);
     viewDate.value = new Date(startOfWeek);
@@ -397,6 +434,9 @@ async function handleExport() {
     await exportFuelRecordsToExcel({
       fechaDesde: fechaDesde.value,
       fechaHasta: fechaHasta.value,
+      tipoCombustible: selectedFuelType.value,
+      tipoDestino: selectedDestType.value,
+      search: props.initialSearch,
       columns: selectedColumns.value
     });
     closeModal();
@@ -411,7 +451,19 @@ async function handleExport() {
 
 <style scoped>
 .export-modal {
-  max-width: 600px;
+  max-width: 620px;
+}
+
+.modal-filters-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 600px) {
+  .modal-filters-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .section-title {

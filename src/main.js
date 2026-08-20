@@ -1,5 +1,14 @@
 import './style.css';
 
+// Inicializar tema desde localStorage inmediatamente
+const savedTheme = localStorage.getItem('theme');
+if (savedTheme === 'light') {
+  document.documentElement.classList.add('light-mode');
+} else {
+  document.documentElement.classList.remove('light-mode');
+}
+
+
 import { createApp } from 'vue';
 import { createPinia } from 'pinia';
 

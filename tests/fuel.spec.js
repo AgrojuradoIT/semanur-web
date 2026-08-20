@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
 
 test('load fuel page and get console log', async ({ page }) => {
     const logs = [];
@@ -14,6 +15,5 @@ test('load fuel page and get console log', async ({ page }) => {
     await page.goto('http://localhost:5173/#/fuel');
     await page.waitForTimeout(2000);
 
-    const fs = require('fs');
     fs.writeFileSync('playwright_logs.txt', logs.join('\n'));
 });

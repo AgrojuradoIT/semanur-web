@@ -445,6 +445,7 @@
     v-if="showExportModal" 
     :initialDesde="filterDesde" 
     :initialHasta="filterHasta" 
+    :initialSearch="search"
     @close="showExportModal = false" 
   />
 </template>
@@ -616,14 +617,35 @@ watch(
   }
 );
 
-onMounted(async () => {
-  await loadData();
+function handleQueryRouting() {
+  const fuelId = route.query.id || route.query.registro_id;
+  const searchTxt = route.query.search;
+
+  if (searchTxt) {
+    search.value = String(searchTxt);
+  }
+
+  if (fuelId && records.value?.length) {
+    const item = records.value.find((r) => String(r.registro_id || r.id) === String(fuelId));
+    if (item) {
+      openViewModal(item);
+    }
+  }
 
   if (route.query.action === 'new' && route.query.vehiculo_id) {
     showCreate.value = true;
     form.value.tipo_destino = 'vehiculo';
     form.value.vehiculo_id = route.query.vehiculo_id;
   }
+}
+
+onMounted(async () => {
+  await loadData();
+  handleQueryRouting();
+});
+
+watch(() => route.query, () => {
+  handleQueryRouting();
 });
 
 function buildFilterParams() {

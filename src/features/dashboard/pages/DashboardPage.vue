@@ -285,158 +285,22 @@
       </section>
 
       <!-- ── 2. KPI CARDS ── -->
-      <section class="dash-kpi-grid">
-        <!-- Flota -->
-        <article class="kpi-card">
-          <div class="kpi-icon-wrap kpi-primary">
-            <span class="material-icons-round">directions_car</span>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Estado de Flota</span>
-            <span class="kpi-value">{{ summary.vehicle_count }}</span>
-            <span class="kpi-sub">Vehículos registrados</span>
-          </div>
-          <span class="kpi-trend kpi-trend-up">
-            <span class="material-icons-round">trending_up</span> Activos
-          </span>
-        </article>
-
-        <!-- Órdenes -->
-        <article class="kpi-card">
-          <div class="kpi-icon-wrap kpi-blue">
-            <span class="material-icons-round">assignment</span>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Cola de Taller</span>
-            <span class="kpi-value">{{ summary.open_orders }}</span>
-            <span class="kpi-sub">OTs abiertas</span>
-          </div>
-          <div class="kpi-tags">
-            <span v-if="oilChangeUrgentCount > 0" class="kpi-tag tag-danger">{{ oilChangeUrgentCount }} Urgente</span>
-            <span v-if="oilChangeSoonCount > 0" class="kpi-tag tag-warning">{{ oilChangeSoonCount }} Próximo</span>
-            <span v-if="oilChangeUrgentCount === 0 && oilChangeSoonCount === 0" class="kpi-tag tag-ok">Al día</span>
-          </div>
-        </article>
-
-        <!-- Docs vencidos -->
-        <article class="kpi-card">
-          <div class="kpi-icon-wrap kpi-danger">
-            <span class="material-icons-round">warning</span>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Alertas Documentales</span>
-            <span class="kpi-value">{{ expiredDocumentsCount }}</span>
-            <span class="kpi-sub">Docs vencidos</span>
-          </div>
-          <p class="kpi-hint" v-if="documentsDueSoonCount > 0">+{{ documentsDueSoonCount }} por vencer en 30d</p>
-        </article>
-
-        <!-- Costo combustible -->
-        <article class="kpi-card">
-          <div class="kpi-icon-wrap kpi-neutral">
-            <span class="material-icons-round">local_gas_station</span>
-          </div>
-          <div class="kpi-body">
-            <span class="kpi-label">Costo Combustible</span>
-            <span class="kpi-value kpi-value-sm">{{ formatCurrency(summary.total_fuel_cost) }}</span>
-            <span class="kpi-sub">{{ fuelTrendLabel }}</span>
-          </div>
-        </article>
-      </section>
+      <KpiStrip
+        :ot-stats="otStats"
+        :preop-hoy="preopHoy"
+        :loans-stats="loansStats"
+        :low-stock="lowStock"
+        :maintenance-cost="maintenanceCost"
+        :docs-counts="docsCounts"
+        :top-maintenance-vehicle="maintenanceByVehicle[0]"
+      />
 
       <!-- ── 3. ACTIVIDAD + ALERTAS ── -->
       <section class="dash-bottom-grid">
 
-        <!-- Consumo mensual (tabla) -->
-        <article class="dash-panel">
-          <div class="dash-panel-head">
-            <h3>Consumo Mensual de Combustible</h3>
-            <span class="badge badge-info">{{ fuelMonthly.length }} meses</span>
-          </div>
-          <div v-if="fuelMonthly.length" class="activity-list">
-            <div
-              v-for="row in fuelMonthly.slice().reverse().slice(0, 6)"
-              :key="`${row.year}-${row.month}`"
-              class="activity-item"
-            >
-              <div class="activity-icon activity-icon-fuel">
-                <span class="material-icons-round">local_gas_station</span>
-              </div>
-              <div class="activity-content">
-                <p class="activity-title">{{ formatMonth(row.year, row.month) }}</p>
-                <p class="activity-desc">{{ formatNumber(row.gallons) }} gal · {{ formatCurrency(row.cost) }}</p>
-              </div>
-              <div class="activity-right">
-                <p class="activity-cost">{{ row.gallons > 0 ? formatCurrency(row.cost / row.gallons) : '-' }}/gal</p>
-              </div>
-            </div>
-          </div>
-          <div v-else class="dash-empty">Sin registros de combustible.</div>
-        </article>
-
-        <!-- Alertas documentales -->
-        <article class="dash-panel">
-          <div class="dash-panel-head">
-            <h3>Alertas Documentales</h3>
-            <span class="badge badge-warning">{{ documentAlerts.length }}</span>
-          </div>
-          <div v-if="documentAlerts.length" class="activity-list">
-            <div
-              v-for="alert in documentAlerts"
-              :key="alert.key"
-              class="activity-item"
-            >
-              <div class="activity-icon" :class="alert.days < 0 ? 'activity-icon-danger' : 'activity-icon-warning'">
-                <span class="material-icons-round">{{ alert.days < 0 ? 'report_problem' : 'schedule' }}</span>
-              </div>
-              <div class="activity-content">
-                <p class="activity-title">{{ alert.plate }}</p>
-                <p class="activity-desc">{{ alert.type }}</p>
-              </div>
-              <div class="activity-right">
-                <span class="badge" :class="alert.days < 0 ? 'badge-danger' : 'badge-warning'">
-                  {{ alert.days < 0 ? `Vencido ${Math.abs(alert.days)}d` : `${alert.days}d` }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div v-else class="dash-empty dash-empty-ok">
-            <span class="material-icons-round">check_circle</span>
-            Sin alertas documentales
-          </div>
-        </article>
-
-        <!-- Cambios de aceite -->
-        <article class="dash-panel">
-          <div class="dash-panel-head">
-            <h3>Cambios de Aceite</h3>
-            <span class="badge badge-danger">{{ oilAlerts.length }}</span>
-          </div>
-          <div v-if="oilAlerts.length" class="activity-list">
-            <div
-              v-for="alert in oilAlerts"
-              :key="alert.key"
-              class="activity-item"
-            >
-              <div class="activity-icon" :class="alert.remainingKm <= 0 ? 'activity-icon-danger' : 'activity-icon-warning'">
-                <span class="material-icons-round">oil_barrel</span>
-              </div>
-              <div class="activity-content">
-                <p class="activity-title">{{ alert.plate }}</p>
-                <p class="activity-desc">{{ formatNumber(alert.currentKm) }} / {{ formatNumber(alert.nextKm) }} km</p>
-              </div>
-              <div class="activity-right">
-                <span class="badge" :class="alert.remainingKm <= 0 ? 'badge-danger' : 'badge-warning'">
-                  {{ alert.remainingKm <= 0 ? `${formatNumber(Math.abs(alert.remainingKm))} km venc.` : `${formatNumber(alert.remainingKm)} km` }}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div v-else class="dash-empty dash-empty-ok">
-            <span class="material-icons-round">check_circle</span>
-            Sin cambios urgentes
-          </div>
-        </article>
+        <TallerEnVivoPanel :por-estado="otStats.porEstado" :sessions="liveSessions" />
+        <ActividadRecientePanel :events="recentActivity" />
+        <CentroAlertasPanel :alerts="alerts" />
 
       </section>
     </template>
@@ -448,9 +312,10 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useAsyncState } from '../../../shared/composables/useAsyncState';
 import { fetchDashboardSources } from '../api/dashboardService';
 import { useRefresh } from '../../../shared/composables/useRefresh';
-
-const OIL_SOON_THRESHOLD_KM = 500;
-const DUE_SOON_DAYS = 30;
+import KpiStrip from '../components/KpiStrip.vue';
+import CentroAlertasPanel from '../components/CentroAlertasPanel.vue';
+import TallerEnVivoPanel from '../components/TallerEnVivoPanel.vue';
+import ActividadRecientePanel from '../components/ActividadRecientePanel.vue';
 
 const { refreshTrigger } = useRefresh();
 const { loading, error, run } = useAsyncState('');
@@ -458,9 +323,17 @@ const { loading, error, run } = useAsyncState('');
 const summary = ref({ total_fuel_cost: 0, total_maintenance_cost: 0, vehicle_count: 0, open_orders: 0 });
 const fuelMonthly = ref([]);
 const maintenanceByVehicle = ref([]);
-const vehicles = ref([]);
 const fuelStock = ref([]);
 const fuelHistory15Days = ref([]);
+const otStats = ref({});
+const preopHoy = ref({});
+const loansStats = ref({});
+const lowStock = ref({});
+const liveSessions = ref({ total: 0, items: [] });
+const recentActivity = ref([]);
+const maintenanceCost = ref(0);
+const docsCounts = ref({});
+const alerts = ref({ items: [], total: 0, counts: {} });
 
 const showGasolina = ref(true);
 const showACPM = ref(true);
@@ -486,9 +359,17 @@ async function loadDashboard() {
       summary.value = payload.summary || summary.value;
       fuelMonthly.value = Array.isArray(payload.fuelMonthly) ? payload.fuelMonthly : [];
       maintenanceByVehicle.value = Array.isArray(payload.maintenanceByVehicle) ? payload.maintenanceByVehicle : [];
-      vehicles.value = Array.isArray(payload.vehicles) ? payload.vehicles : [];
       fuelStock.value = Array.isArray(payload.fuelStock) ? payload.fuelStock : [];
       fuelHistory15Days.value = Array.isArray(payload.fuelHistory15Days) ? payload.fuelHistory15Days : [];
+      otStats.value = payload.otStats || {};
+      preopHoy.value = payload.preopHoy || {};
+      loansStats.value = payload.loansStats || {};
+      lowStock.value = payload.lowStock || {};
+      liveSessions.value = payload.liveSessions || { total: 0, items: [] };
+      recentActivity.value = Array.isArray(payload.recentActivity) ? payload.recentActivity : [];
+      maintenanceCost.value = Number(payload.maintenanceCost || 0);
+      docsCounts.value = payload.docsCounts || {};
+      alerts.value = payload.alerts || { items: [], total: 0, counts: {} };
     }, 'Error al cargar dashboard');
   } catch { /* handled */ }
 }
@@ -617,75 +498,7 @@ const formatTooltipDate = (rawDate) => {
 
 watch(refreshTrigger, loadDashboard);
 
-// --- Vehicle Alerts ---
-const parsedVehicleAlerts = computed(() =>
-  vehicles.value.map((vehicle, index) => {
-    const plate = vehicle?.placa || `Vehiculo-${index + 1}`;
-    const soatDays = daysUntil(vehicle?.fecha_vencimiento_soat || vehicle?.soat);
-    const technoDays = daysUntil(vehicle?.fecha_vencimiento_tecnomecanica || vehicle?.rtm);
-    const currentKm = Number(vehicle?.kilometraje_actual ?? 0);
-    const nextKm = Number(vehicle?.kilometraje_proximo_mantenimiento ?? 0);
-    const hasOilData = Number.isFinite(currentKm) && Number.isFinite(nextKm) && nextKm > 0;
-    const remainingKm = hasOilData ? Math.round(nextKm - currentKm) : null;
-    return { key: `${plate}-${index}`, plate, soatDays, technoDays, currentKm, nextKm, remainingKm };
-  })
-);
-
-const documentAlerts = computed(() => {
-  const alerts = [];
-  parsedVehicleAlerts.value.forEach((item) => {
-    if (item.soatDays !== null && item.soatDays <= DUE_SOON_DAYS)
-      alerts.push({ key: `${item.key}-soat`, plate: item.plate, type: 'SOAT', days: item.soatDays });
-    if (item.technoDays !== null && item.technoDays <= DUE_SOON_DAYS)
-      alerts.push({ key: `${item.key}-tecno`, plate: item.plate, type: 'Tecnomecánica', days: item.technoDays });
-  });
-  return alerts.sort((a, b) => a.days - b.days).slice(0, 8);
-});
-
-const oilAlerts = computed(() =>
-  parsedVehicleAlerts.value
-    .filter((item) => item.remainingKm !== null && item.remainingKm <= OIL_SOON_THRESHOLD_KM)
-    .sort((a, b) => a.remainingKm - b.remainingKm)
-    .slice(0, 8)
-);
-
-const expiredDocumentsCount = computed(() =>
-  parsedVehicleAlerts.value.reduce((c, item) =>
-    c + (item.soatDays !== null && item.soatDays < 0 ? 1 : 0)
-      + (item.technoDays !== null && item.technoDays < 0 ? 1 : 0), 0)
-);
-
-const documentsDueSoonCount = computed(() =>
-  parsedVehicleAlerts.value.reduce((c, item) =>
-    c + (item.soatDays !== null && item.soatDays >= 0 && item.soatDays <= DUE_SOON_DAYS ? 1 : 0)
-      + (item.technoDays !== null && item.technoDays >= 0 && item.technoDays <= DUE_SOON_DAYS ? 1 : 0), 0)
-);
-
-const oilChangeUrgentCount = computed(() =>
-  parsedVehicleAlerts.value.filter((item) => item.remainingKm !== null && item.remainingKm <= 0).length
-);
-
-const oilChangeSoonCount = computed(() =>
-  parsedVehicleAlerts.value.filter((item) => item.remainingKm !== null && item.remainingKm > 0 && item.remainingKm <= OIL_SOON_THRESHOLD_KM).length
-);
-
-const fuelTrendLabel = computed(() => {
-  if (fuelMonthly.value.length < 2) return 'Sin base comparativa';
-  const last = Number(fuelMonthly.value[fuelMonthly.value.length - 1]?.gallons ?? 0);
-  const prev = Number(fuelMonthly.value[fuelMonthly.value.length - 2]?.gallons ?? 0);
-  if (prev <= 0) return 'Sin comparativo';
-  const change = ((last - prev) / prev) * 100;
-  return `${change >= 0 ? '+' : ''}${change.toFixed(1)}% vs mes anterior`;
-});
-
 // --- Utilities ---
-function daysUntil(rawDate) {
-  if (!rawDate) return null;
-  const date = new Date(rawDate);
-  if (Number.isNaN(date.getTime())) return null;
-  return Math.ceil((date - new Date()) / 864e5);
-}
-
 function formatMonth(year, month) {
   const d = new Date(Number(year), Number(month) - 1, 1);
   return Number.isNaN(d.getTime()) ? 'N/D'
@@ -1136,7 +949,7 @@ function getFuelLevelText(fuel) {
 /* ═══ BOTTOM GRID ═══ */
 .dash-bottom-grid {
   display: grid;
-  grid-template-columns: 1.3fr 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
 }
 
@@ -1294,10 +1107,14 @@ function getFuelLevelText(fuel) {
 
 @media (max-width: 768px) {
   .dash-kpi-grid { grid-template-columns: 1fr 1fr; }
-  .dash-bottom-grid { grid-template-columns: 1fr; }
+  .dash-bottom-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .fuel-tank-card { padding: 20px; }
   .fuel-tank-name { font-size: 1.6rem; }
   .fuel-tank-value { font-size: 2.4rem; }
+}
+
+@media (max-width: 575px) {
+  .dash-bottom-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ═══ HISTÓRICO DE COMBUSTIBLE 15 DÍAS ═══ */

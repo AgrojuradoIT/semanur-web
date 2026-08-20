@@ -1006,20 +1006,32 @@ const loadData = async () => {
   }
 };
 
-onMounted(async () => {
-  await loadData();
+function handleQueryRouting() {
+  const vehiculoId = route.query.vehiculo_id || route.query.id;
+  const placa = route.query.placa || route.query.search;
 
-  // Auto-abrir detalle si viene de una notificación con vehiculo_id
-  const vehiculoId = route.query.vehiculo_id;
-  if (vehiculoId) {
-    const vehicle = vehicles.value.find(
-      (v) => String(v.vehiculo_id || v.id) === String(vehiculoId)
-    );
+  if (vehiculoId || placa) {
+    const vehicle = vehicles.value.find((v) => {
+      const matchId = vehiculoId && String(v.vehiculo_id || v.id) === String(vehiculoId);
+      const matchPlate = placa && vehiclePlate(v).toLowerCase() === String(placa).toLowerCase();
+      return matchId || matchPlate;
+    });
+
     if (vehicle) {
       goToVehicle(vehicle);
+    } else if (placa) {
+      search.value = String(placa);
     }
-    router.replace({ query: {} });
   }
+}
+
+onMounted(async () => {
+  await loadData();
+  handleQueryRouting();
+});
+
+watch(() => route.query, () => {
+  handleQueryRouting();
 });
 
 watch(refreshTrigger, loadData);

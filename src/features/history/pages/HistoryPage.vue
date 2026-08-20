@@ -17,10 +17,10 @@
       </div>
     </div>
 
-    <div class="table-container" style="margin-bottom: 14px">
-      <div class="table-header" style="gap: 12px; flex-wrap: wrap">
+    <div class="table-container filter-card" style="margin-bottom: 14px; overflow: visible; position: relative; z-index: 30;">
+      <div class="table-header" style="gap: 12px; flex-wrap: wrap; overflow: visible;">
         <h3 class="table-title">FILTROS DE AUDITORIA</h3>
-        <div class="table-actions" style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; width: 100%">
+        <div class="table-actions" style="display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 8px; width: 100%; overflow: visible;">
           <select class="input" v-model="selectedModule">
             <option value="Todos">Todos los modulos</option>
             <option value="Inventario">Inventario</option>
@@ -30,6 +30,7 @@
 
           <select class="input" v-model="selectedAction">
             <option value="Todas">Todas las acciones</option>
+            <option value="Reversiones">Reversión / Reajuste</option>
             <option value="Crear">Crear</option>
             <option value="Actualizar">Actualizar</option>
             <option value="Eliminar">Eliminar</option>
@@ -172,7 +173,10 @@ const filteredEvents = computed(() => {
 
   return allEvents.value.filter((event) => {
     const matchesModule = selectedModule.value === 'Todos' || event.module === selectedModule.value;
-    const matchesAction = selectedAction.value === 'Todas' || event.action === selectedAction.value;
+    const matchesAction = selectedAction.value === 'Todas' 
+      || (selectedAction.value === 'Reversiones' 
+            ? (event.action === 'Reversión' || event.action === 'Reajuste') 
+            : event.action === selectedAction.value);
     const matchesUser = selectedUser.value === 'Todos' || event.user === selectedUser.value;
 
     const eventDate = new Date(event.timestamp);
@@ -209,6 +213,8 @@ function formatDate(value) {
 }
 
 function actionBadgeClass(action) {
+  if (action === 'Reversión') return 'badge-reversal';
+  if (action === 'Reajuste') return 'badge-adjustment';
   if (action === 'Crear') return 'badge-success';
   if (action === 'Actualizar') return 'badge-info';
   if (action === 'Eliminar') return 'badge-danger';
@@ -220,10 +226,27 @@ function actionBadgeClass(action) {
 function mapMovements(items) {
   return items.map((m) => {
     const tipo = (m.transaccion_tipo || m.tipo || '').toLowerCase();
+    const motivo = (m.transaccion_motivo || m.motivo || '').toLowerCase();
+    const notas = (m.transaccion_notas || m.notas || '').toLowerCase();
+    
+    const isReversal = m.reverses_transaction_id != null 
+      || motivo.includes('revers') 
+      || notas.includes('revers') 
+      || notas.includes('contraasiento');
+
+    const isAdjustment = !isReversal && (
+      motivo.includes('ajust') 
+      || notas.includes('ajust')
+    );
+
+    let actionLabel = 'Crear';
+    if (isReversal) actionLabel = 'Reversión';
+    else if (isAdjustment) actionLabel = 'Reajuste';
+
     return {
       id: `mov_${m.transaccion_id || m.id || Math.random().toString(36).slice(2)}`,
       module: 'Inventario',
-      action: 'Crear',
+      action: actionLabel,
       user: m.usuario?.name || m.usuario_nombre || m.usuarioNombre || 'Sistema',
       title: `${(tipo || 'movimiento').toUpperCase()} - ${m.producto?.producto_nombre || m.producto?.nombre || m.producto_nombre || 'Producto'}`,
       description: `${m.transaccion_motivo || m.motivo || 'Sin motivo'} (${m.transaccion_cantidad || m.cantidad || 0} unid)`,
@@ -275,6 +298,24 @@ function mapLoans(items) {
 </script>
 
 <style scoped>
+.badge-reversal {
+  background: rgba(168, 85, 247, 0.2) !important;
+  color: #c084fc !important;
+  border: 1px solid rgba(168, 85, 247, 0.5) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.4px;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.25);
+}
+
+.badge-adjustment {
+  background: rgba(56, 189, 248, 0.18) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.4px;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+}
+
 @media (max-width: 768px) {
   .table-actions {
     grid-template-columns: 1fr !important;
