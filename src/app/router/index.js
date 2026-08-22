@@ -1,21 +1,24 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 
 import AppShell from '../layouts/AppShell.vue';
-import LoginPage from '../../features/auth/pages/LoginPage.vue';
-import DashboardPage from '../../features/dashboard/pages/DashboardPage.vue';
-import InventoryPage from '../../features/inventory/pages/InventoryPage.vue';
-import FleetPage from '../../features/fleet/pages/FleetPage.vue';
-import WorkOrdersPage from '../../features/work-orders/pages/WorkOrdersPage.vue';
-import AuditWorkOrders from '../../features/work-orders/pages/AuditWorkOrders.vue';
-import EmployeesPage from '../../features/employees/pages/EmployeesPage.vue';
-import HistoryPage from '../../features/history/pages/HistoryPage.vue';
-import LoansPage from '../../features/loans/pages/LoansPage.vue';
-import FuelPage from '../../features/fuel/pages/FuelPage.vue';
-import FuelReportsPage from '../../features/fuel/pages/FuelReportsPage.vue';
-import PreoperacionalesPage from '../../features/preoperacionales/pages/PreoperacionalesPage.vue';
-import SchedulerPage from '../../features/scheduler/pages/SchedulerPage.vue';
-import NotificationsPage from '../../features/notifications/pages/NotificationsPage.vue';
 import { useAuthStore } from '../../shared/stores/auth';
+
+// Route-level code splitting: each page lands in its own chunk and is
+// fetched on first navigation, keeping the entry bundle small.
+const LoginPage = () => import('../../features/auth/pages/LoginPage.vue');
+const DashboardPage = () => import('../../features/dashboard/pages/DashboardPage.vue');
+const InventoryPage = () => import('../../features/inventory/pages/InventoryPage.vue');
+const FleetPage = () => import('../../features/fleet/pages/FleetPage.vue');
+const WorkOrdersPage = () => import('../../features/work-orders/pages/WorkOrdersPage.vue');
+const AuditWorkOrders = () => import('../../features/work-orders/pages/AuditWorkOrders.vue');
+const EmployeesPage = () => import('../../features/employees/pages/EmployeesPage.vue');
+const HistoryPage = () => import('../../features/history/pages/HistoryPage.vue');
+const LoansPage = () => import('../../features/loans/pages/LoansPage.vue');
+const FuelPage = () => import('../../features/fuel/pages/FuelPage.vue');
+const FuelReportsPage = () => import('../../features/fuel/pages/FuelReportsPage.vue');
+const PreoperacionalesPage = () => import('../../features/preoperacionales/pages/PreoperacionalesPage.vue');
+const SchedulerPage = () => import('../../features/scheduler/pages/SchedulerPage.vue');
+const NotificationsPage = () => import('../../features/notifications/pages/NotificationsPage.vue');
 
 const shellChildren = [
   { path: '', name: 'dashboard', component: DashboardPage, meta: { title: 'Dashboard', requiresAuth: true, modulo: 'analitica' } },
