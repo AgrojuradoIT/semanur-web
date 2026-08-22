@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures.js';
 import path from 'node:path';
 
 const dashboardFixture = {
@@ -61,8 +61,8 @@ async function openDashboard(page, fixture = dashboardFixture, { status = 200 } 
     localStorage.setItem('semanur_user', JSON.stringify({ id: 1, name: 'Dashboard Test', role: 'admin', permisos_efectivos: ['analitica.read'] }));
   });
 
-  await page.route('http://localhost:8000/api/**', async (route) => {
-    const path = new URL(route.request().url()).pathname;
+  await page.route('**/__api__/**', async (route) => {
+    const path = new URL(route.request().url()).pathname.replace(/^\/__api__/, '/api');
     requests.push(path);
 
     if (path === '/api/dashboard/all') {
@@ -129,18 +129,18 @@ test('renders the live workshop mini-board and active-session list with semantic
   await expect(page).toHaveURL(/#\/work-orders$/);
 });
 
-test('renders five newest-first activity rows with type icons and module links', async ({ page }) => {
+test('renders eight newest-first activity rows with type icons and module links', async ({ page }) => {
   await openDashboard(page);
 
   const panel = page.getByTestId('recent-activity-panel');
   await expect(panel).toBeVisible();
-  await expect(panel.getByTestId('activity-item')).toHaveCount(5);
+  await expect(panel.getByTestId('activity-item')).toHaveCount(8);
   await expect(panel.getByTestId('activity-item').first()).toContainText('OT #31 creada');
   await expect(panel.getByTestId('activity-item').first().getByTestId('activity-icon')).toHaveText('assignment');
   await expect(panel.getByTestId('activity-item').nth(1).getByTestId('activity-icon')).toHaveText('inventory_2');
   await expect(panel.getByTestId('activity-item').nth(2).getByTestId('activity-icon')).toHaveText('local_gas_station');
   await panel.getByTestId('activity-item').nth(1).click();
-  await expect(page).toHaveURL(/#\/inventory$/);
+  await expect(page).toHaveURL(/#\/inventory\?search=/);
 });
 
 test('shows positive empty states for live sessions and recent activity', async ({ page }) => {
@@ -160,13 +160,13 @@ test('renders BFF alerts in severity order, exposes overflow and deep-links flee
   await expect(panel).toBeVisible();
   await expect(panel.getByTestId('alert-item')).toHaveCount(3);
   await expect(panel.getByTestId('alert-item').nth(0)).toContainText('SOAT vencido');
-  await expect(panel.getByTestId('alerts-overflow')).toHaveText('+2');
+  await expect(panel.getByTestId('alerts-overflow')).toHaveText('+2 más');
 
   await panel.getByTestId('alert-item').nth(0).click();
-  await expect(page).toHaveURL(/#\/fleet$/);
+  await expect(page).toHaveURL(/#\/fleet\?placa=AAA111$/);
   await page.goto('/#/');
   await panel.getByTestId('alert-item').nth(1).click();
-  await expect(page).toHaveURL(/#\/inventory$/);
+  await expect(page).toHaveURL(/#\/inventory\?search=Filtro$/);
   await page.goto('/#/');
   await panel.getByTestId('alert-item').nth(2).click();
   await expect(page).toHaveURL(/#\/loans$/);

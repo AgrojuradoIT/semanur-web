@@ -33,11 +33,7 @@
           <div class="about-info">
             <div class="info-row">
               <span class="info-label">Desarrollado por</span>
-              <span class="info-value">Agropecuaria Jurado S.A.S.</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">Stack</span>
-              <span class="info-value">Vue 3 + Laravel 11 + Flutter</span>
+              <span class="info-value">Agropecuaria Juradó S.A.S.</span>
             </div>
             <div class="info-row">
               <span class="info-label">Derechos</span>

@@ -441,6 +441,7 @@ import {
 import { useCatalogsStore } from '../../../shared/stores/catalogs';
 import { useAuthStore } from '../../../shared/stores/auth';
 import { useRefresh } from '../../../shared/composables/useRefresh';
+import { createClientOperationTracker } from '../../../shared/utils/clientOperation';
 import SearchableSelect from '../../../shared/components/SearchableSelect.vue';
 
 const { refreshTrigger } = useRefresh();
@@ -465,6 +466,7 @@ const createForm = ref({
   descripcion: '',
   foto_evidencia: null,
 });
+const createOperation = createClientOperationTracker();
 
 function onFileChange(event) {
   const file = event.target.files[0];
@@ -611,10 +613,12 @@ function closeDetailModal() {
 }
 
 function openCreateModal() {
+  createOperation.reset();
   showCreate.value = true;
 }
 
 function closeCreateModal() {
+  createOperation.reset();
   showCreate.value = false;
   createForm.value = {
     vehiculo_id: '',
@@ -634,18 +638,35 @@ async function submitCreate() {
   savingCreate.value = true;
   clearError();
   try {
+    const evidence = createForm.value.foto_evidencia;
+    const operationPayload = {
+      vehiculo_id: createForm.value.vehiculo_id,
+      mecanico_asignado_id: createForm.value.mecanico_asignado_id || null,
+      prioridad: createForm.value.prioridad,
+      descripcion: createForm.value.descripcion.trim(),
+      foto_evidencia: evidence
+        ? {
+            name: evidence.name,
+            size: evidence.size,
+            type: evidence.type,
+            lastModified: evidence.lastModified,
+          }
+        : null,
+    };
     const payload = new FormData();
-    payload.append('vehiculo_id', createForm.value.vehiculo_id);
-    if (createForm.value.mecanico_asignado_id) {
-      payload.append('mecanico_asignado_id', createForm.value.mecanico_asignado_id);
+    payload.append('vehiculo_id', operationPayload.vehiculo_id);
+    if (operationPayload.mecanico_asignado_id) {
+      payload.append('mecanico_asignado_id', operationPayload.mecanico_asignado_id);
     }
-    payload.append('prioridad', createForm.value.prioridad);
-    payload.append('descripcion', createForm.value.descripcion.trim());
-    if (createForm.value.foto_evidencia) {
-      payload.append('foto_evidencia', createForm.value.foto_evidencia);
+    payload.append('prioridad', operationPayload.prioridad);
+    payload.append('descripcion', operationPayload.descripcion);
+    payload.append('client_operation_id', createOperation.idFor(operationPayload));
+    if (evidence) {
+      payload.append('foto_evidencia', evidence);
     }
 
     await createWorkOrder(payload);
+    createOperation.reset();
     closeCreateModal();
     await loadData();
   } catch (e) {

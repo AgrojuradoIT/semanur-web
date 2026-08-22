@@ -472,6 +472,7 @@ import {
 } from '../api/fuelService';
 import { useAuthStore } from '../../../shared/stores/auth';
 import { useCatalogsStore } from '../../../shared/stores/catalogs';
+import { createClientOperationTracker } from '../../../shared/utils/clientOperation';
 import SearchableSelect from '../../../shared/components/SearchableSelect.vue';
 import ExportFuelModal from '../components/ExportFuelModal.vue';
 import DateRangeCalendar from '../components/DateRangeCalendar.vue';
@@ -522,6 +523,7 @@ const form = ref(defaultForm());
 const editForm = ref({});
 const viewItem = ref({});
 const editingId = ref(null);
+const createOperation = createClientOperationTracker();
 
 // Pagination
 const currentPage = ref(1);
@@ -721,11 +723,13 @@ const filteredRecords = computed(() => {
 });
 
 function openCreateModal() {
+  createOperation.reset();
   formError.value = '';
   showCreate.value = true;
 }
 
 function closeCreateModal() {
+  createOperation.reset();
   showCreate.value = false;
   form.value = defaultForm();
   formError.value = '';
@@ -740,7 +744,11 @@ async function submitCreate() {
 
   try {
     const payload = buildCreatePayload();
-    await createFuelRecord(payload);
+    await createFuelRecord({
+      ...payload,
+      client_operation_id: createOperation.idFor(payload),
+    });
+    createOperation.reset();
     closeCreateModal();
     await loadData();
   } catch (e) {

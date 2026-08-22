@@ -115,7 +115,7 @@
               <!-- Vehicle Identity Section (Moved inside Resumen Tab, or keep global if it should be in all tabs) -->
               <!-- The user requested "botones arriba de la foto y placa" which means tabs go first, then the identity section -->
               <div class="fd-identity">
-                <div class="fd-image-container" @click="isEditing ? $refs.fileInput.click() : null" :style="{ cursor: isEditing ? 'pointer' : 'default' }">
+                <div class="fd-image-container" @click="authStore.hasPermission('flota.write') ? $refs.fileInput.click() : null" :style="{ cursor: authStore.hasPermission('flota.write') ? 'pointer' : 'default' }">
                   <img 
                     :src="getVehicleImage(selectedVehicle)" 
                     alt="Vehicle Image" 
@@ -123,8 +123,8 @@
                     loading="lazy"
                     @error="$event.target.src = '/fleet/generic.png'" 
                   />
-                  <div class="fd-image-overlay" v-if="isEditing">
-                    <span class="material-icons-round">photo_camera</span>
+                  <div class="fd-image-overlay" v-if="authStore.hasPermission('flota.write')">
+                    <span class="material-icons-round">{{ isUploading ? 'hourglass_top' : 'photo_camera' }}</span>
                     <span>{{ isUploading ? 'SUBIENDO...' : 'CAMBIAR IMAGEN' }}</span>
                   </div>
                   <input 
@@ -456,11 +456,11 @@
 
       <!-- Documentation Modal -->
       <div v-if="showDocsModal && selectedVehicle" class="modal-overlay" @click.self="showDocsModal = false" style="z-index: 1001;">
-        <div class="fd-modal" style="width: 600px; max-height: 80vh;">
+        <div class="fd-modal" style="width: 720px; max-height: 85vh; display: flex; flex-direction: column;">
           <header class="fd-header">
             <div class="fd-header-content">
               <div class="fd-header-title">
-                <span class="material-icons-round" style="font-size: 16px;">library_books</span>
+                <span class="material-icons-round" style="font-size: 18px;">library_books</span>
                 <h2>DOCUMENTACIÓN <span class="fd-header-subtitle">/ {{ vehiclePlate(selectedVehicle) }}</span></h2>
               </div>
             </div>
@@ -469,17 +469,26 @@
             </button>
           </header>
 
-          <div class="fd-body" style="min-height: auto;">
-            <!-- SOAT History Placeholder -->
-            <div class="fd-history-header">
+          <div class="fd-body" style="min-height: auto; overflow-y: auto; flex: 1; padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+            <!-- SOAT History -->
+            <div class="fd-history-header" style="display: flex; align-items: center; justify-content: space-between;">
               <h3>
-                <span class="material-icons-round">health_and_safety</span>
+                <span class="material-icons-round" style="color: var(--primary);">health_and_safety</span>
                 Seguro Obligatorio (SOAT)
               </h3>
+              <button
+                v-if="authStore.hasPermission('flota.write')"
+                class="fd-btn-outline"
+                @click="openRenewModal('soat')"
+                style="font-size: 0.75rem; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; border-color: var(--primary); color: var(--primary); cursor: pointer;"
+              >
+                <span class="material-icons-round" style="font-size: 16px;">autorenew</span>
+                Renovar SOAT
+              </button>
             </div>
-            <div class="fd-history-table">
+            <div class="fd-history-table" style="max-height: 180px; overflow-y: auto; overflow-x: auto;">
               <table>
-                <thead>
+                <thead style="position: sticky; top: 0; z-index: 2;">
                   <tr>
                     <th>Fecha Inicio</th>
                     <th>Fecha Vencimiento</th>
@@ -504,27 +513,33 @@
                     </td>
                   </tr>
                   <tr v-if="documentosList.filter(d => d.tipo === 'soat').length === 0">
-                    <td colspan="5" style="text-align: center; color: var(--text-gray);">No hay documentos SOAT registrados</td>
+                    <td colspan="5" style="text-align: center; color: var(--text-gray); padding: 16px;">No hay documentos SOAT registrados</td>
                   </tr>
                 </tbody>
               </table>
-              <div style="margin-top: 8px; text-align: right;">
-                <button v-if="authStore.hasPermission('flota.write')" class="fd-btn-outline" @click="openRenewModal('soat')" style="font-size: 0.75rem; padding: 4px 12px; border-color: transparent;">+ Renovar SOAT</button>
-              </div>
             </div>
 
-            <hr style="border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); margin: var(--sp-sm) 0;" />
+            <hr style="border: none; border-top: 1px solid var(--surface-2); margin: 4px 0;" />
 
-            <!-- RTM History Placeholder -->
-            <div class="fd-history-header">
+            <!-- RTM History -->
+            <div class="fd-history-header" style="display: flex; align-items: center; justify-content: space-between;">
               <h3>
-                <span class="material-icons-round">verified</span>
+                <span class="material-icons-round" style="color: var(--primary);">verified</span>
                 Revisión Técnico-Mecánica
               </h3>
+              <button
+                v-if="authStore.hasPermission('flota.write')"
+                class="fd-btn-outline"
+                @click="openRenewModal('tecnomecanica')"
+                style="font-size: 0.75rem; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; border-color: var(--primary); color: var(--primary); cursor: pointer;"
+              >
+                <span class="material-icons-round" style="font-size: 16px;">autorenew</span>
+                Renovar Tecnomecánica
+              </button>
             </div>
-            <div class="fd-history-table">
+            <div class="fd-history-table" style="max-height: 180px; overflow-y: auto; overflow-x: auto;">
               <table>
-                <thead>
+                <thead style="position: sticky; top: 0; z-index: 2;">
                   <tr>
                     <th>Fecha Inicio</th>
                     <th>Fecha Vencimiento</th>
@@ -549,15 +564,16 @@
                     </td>
                   </tr>
                   <tr v-if="documentosList.filter(d => d.tipo === 'tecnomecanica').length === 0">
-                    <td colspan="5" style="text-align: center; color: var(--text-gray);">No hay documentos de tecnicomecánica registrados</td>
+                    <td colspan="5" style="text-align: center; color: var(--text-gray); padding: 16px;">No hay documentos de tecnomecánica registrados</td>
                   </tr>
                 </tbody>
               </table>
-               <div style="margin-top: 8px; text-align: right;">
-                <button v-if="authStore.hasPermission('flota.write')" class="fd-btn-outline" @click="openRenewModal('tecnomecanica')" style="font-size: 0.75rem; padding: 4px 12px; border-color: transparent;">+ Renovar Tecnomecánica</button>
-              </div>
             </div>
           </div>
+
+          <footer class="fd-footer" style="padding: 12px 20px;">
+            <button class="fd-btn-outline" @click="showDocsModal = false" style="padding: 8px 20px;">CERRAR</button>
+          </footer>
         </div>
       </div>
 
@@ -600,11 +616,11 @@
       </div>
 
       <!-- Inline Fuel Modal -->
-      <div v-if="showFuelModal" class="modal-overlay" @click.self="showFuelModal = false">
+      <div v-if="showFuelModal" class="modal-overlay" @click.self="closeFuelModal">
         <div class="modal">
           <div class="modal-header">
             <h3>Registrar Combustible</h3>
-            <button @click="showFuelModal = false" class="modal-close">
+            <button @click="closeFuelModal" class="modal-close">
               <span class="material-icons-round">close</span>
             </button>
           </div>
@@ -647,7 +663,7 @@
                 <textarea v-model="fuelForm.notas" class="input" rows="2" placeholder="Observaciones..."></textarea>
               </div>
               <div class="modal-footer" style="border: none; padding: var(--sp-md) 0 0 0;">
-                <button type="button" @click="showFuelModal = false" class="btn btn-secondary">Cancelar</button>
+                <button type="button" @click="closeFuelModal" class="btn btn-secondary">Cancelar</button>
                 <button type="submit" class="btn btn-primary" :disabled="savingFuel">
                   <span v-if="savingFuel" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
                   <span v-else>Registrar</span>
@@ -659,11 +675,11 @@
       </div>
 
       <!-- Inline Work Order Modal -->
-      <div v-if="showWorkOrderModal" class="modal-overlay" @click.self="showWorkOrderModal = false">
+      <div v-if="showWorkOrderModal" class="modal-overlay" @click.self="closeWorkOrderModal">
         <div class="modal">
           <div class="modal-header">
             <h3>Nueva Orden de Trabajo</h3>
-            <button @click="showWorkOrderModal = false" class="modal-close">
+            <button @click="closeWorkOrderModal" class="modal-close">
               <span class="material-icons-round">close</span>
             </button>
           </div>
@@ -691,7 +707,7 @@
                 />
               </div>
               <div class="modal-footer" style="border: none; padding: var(--sp-md) 0 0 0;">
-                <button type="button" @click="showWorkOrderModal = false" class="btn btn-secondary">Cancelar</button>
+                <button type="button" @click="closeWorkOrderModal" class="btn btn-secondary">Cancelar</button>
                 <button type="submit" class="btn btn-primary" :disabled="savingWorkOrder">
                   <span v-if="savingWorkOrder" class="spinner" style="width:14px;height:14px;border-width:2px;"></span>
                   <span v-else>Crear Orden</span>
@@ -893,6 +909,7 @@ import { useDynamicIsland } from '../../../shared/composables/useDynamicIsland';
 import { createFuelRecord } from '../../fuel/api/fuelService';
 import { createWorkOrder } from '../../work-orders/api/workOrdersService';
 import { createMovement } from '../../inventory/api/inventoryService';
+import { createClientOperationTracker } from '../../../shared/utils/clientOperation';
 
 const router = useRouter();
 const route = useRoute();
@@ -957,6 +974,7 @@ const fuelForm = ref({
   notas: ''
 });
 const savingFuel = ref(false);
+const fuelOperation = createClientOperationTracker();
 
 const showWorkOrderModal = ref(false);
 const workOrderForm = ref({
@@ -965,6 +983,7 @@ const workOrderForm = ref({
   prioridad: 'Media'
 });
 const savingWorkOrder = ref(false);
+const workOrderOperation = createClientOperationTracker();
 
 const showMovementModal = ref(false);
 const movementForm = ref({
@@ -985,11 +1004,11 @@ const typeFilters = [
   { value: 'maquinaria', label: 'Maquinaria' },
 ];
 
-const loadData = async () => {
+const loadData = async (force = false) => {
   try {
     await run(async () => {
       const catalogsStore = useCatalogsStore();
-      await catalogsStore.fetchEssentialCatalogs();
+      await catalogsStore.fetchEssentialCatalogs(force);
       
       vehicles.value = catalogsStore.vehiculos;
       operatorsList.value = catalogsStore.empleados.filter(e => {
@@ -1196,6 +1215,8 @@ async function goToVehicle(vehicle) {
 }
 
 function closeDetailModal() {
+  fuelOperation.reset();
+  workOrderOperation.reset();
   showDetailModal.value = false;
   showDocsModal.value = false;
   selectedVehicle.value = null;
@@ -1227,6 +1248,7 @@ function getDocUrl(path) {
 function openVehicleModal(vehicle = null) {
   isEditingVehicle.value = !!vehicle;
   if (vehicle) {
+    selectedVehicle.value = vehicle;
     vehicleForm.value = {
       placa: vehicle.placa || '',
       tipo: (vehicle.tipo || '').toLowerCase(),
@@ -1337,15 +1359,21 @@ function goToRegisterFuel() {
     labor: '',
     notas: ''
   };
+  fuelOperation.reset();
   showFuelModal.value = true;
 }
 
+function closeFuelModal() {
+  fuelOperation.reset();
+  showFuelModal.value = false;
+}
+
 async function submitFuel() {
-  if (!selectedVehicle.value) return;
+  if (!selectedVehicle.value || savingFuel.value) return;
   savingFuel.value = true;
   try {
     const vId = selectedVehicle.value.vehiculo_id || selectedVehicle.value.id;
-    await createFuelRecord({
+    const payload = {
       vehiculo_id: vId,
       tipo_destino: 'vehiculo',
       tipo_combustible: fuelForm.value.tipo_combustible,
@@ -1355,9 +1383,13 @@ async function submitFuel() {
       empleado_id: fuelForm.value.empleado_id ? Number(fuelForm.value.empleado_id) : undefined,
       labor: fuelForm.value.labor?.trim() || null,
       notas: fuelForm.value.notas?.trim() || null,
-      valor_total: 0
+      valor_total: 0,
+    };
+    await createFuelRecord({
+      ...payload,
+      client_operation_id: fuelOperation.idFor(payload),
     });
-    showFuelModal.value = false;
+    closeFuelModal();
     // Recargar historial de combustible
     combustibleList.value = await getVehicleFuelHistory(vId);
     activeTab.value = 'combustible';
@@ -1375,21 +1407,31 @@ function goToNewWorkOrder() {
     mecanico_asignado_id: selectedVehicle.value.mecanico_asignado_id || '',
     prioridad: 'Media'
   };
+  workOrderOperation.reset();
   showWorkOrderModal.value = true;
 }
 
+function closeWorkOrderModal() {
+  workOrderOperation.reset();
+  showWorkOrderModal.value = false;
+}
+
 async function submitWorkOrder() {
-  if (!selectedVehicle.value) return;
+  if (!selectedVehicle.value || savingWorkOrder.value) return;
   savingWorkOrder.value = true;
   try {
     const vId = selectedVehicle.value.vehiculo_id || selectedVehicle.value.id;
-    await createWorkOrder({
+    const payload = {
       vehiculo_id: vId,
       descripcion: workOrderForm.value.descripcion?.trim(),
       mecanico_asignado_id: workOrderForm.value.mecanico_asignado_id ? Number(workOrderForm.value.mecanico_asignado_id) : undefined,
-      prioridad: workOrderForm.value.prioridad
+      prioridad: workOrderForm.value.prioridad,
+    };
+    await createWorkOrder({
+      ...payload,
+      client_operation_id: workOrderOperation.idFor(payload),
     });
-    showWorkOrderModal.value = false;
+    closeWorkOrderModal();
     // Recargar historial de taller
     const fullData = await getVehicleDetails(vId);
     if (fullData.ordenes_trabajo) {
@@ -1528,16 +1570,24 @@ async function handleImageUpload(event) {
     const compressedFile = await compressImage(rawFile, 1000, 0.82);
     
     const vehicleId = selectedVehicle.value.vehiculo_id || selectedVehicle.value.id;
-    await uploadVehicleImage(vehicleId, compressedFile);
+    const response = await uploadVehicleImage(vehicleId, compressedFile);
+
+    islandNotify({ type: 'success', title: 'Imagen actualizada', message: 'La foto del vehículo se subió correctamente', duration: 8000 });
+
+    // Refresh list with force=true to bypass in-memory Pinia cache
+    await loadData(true);
     
-    // Refresh list to get new image URL
-    await loadData();
     // Update local selected vehicle if it matches
     const updated = vehicles.value.find(v => (v.vehiculo_id || v.id) === vehicleId);
-    if (updated) selectedVehicle.value = updated;
+    if (updated) {
+      selectedVehicle.value = { ...selectedVehicle.value, ...updated, ...(response?.vehiculo || {}) };
+    } else if (response?.vehiculo) {
+      selectedVehicle.value = { ...selectedVehicle.value, ...response.vehiculo };
+    }
   } catch (err) {
     console.error('Error al subir imagen:', err);
-    islandNotify({ type: 'error', title: 'Error al subir imagen', message: 'No se pudo subir la imagen', duration: 30000 });
+    const errMsg = err.response?.data?.message || err.message || 'No se pudo subir la imagen';
+    islandNotify({ type: 'error', title: 'Error al subir imagen', message: errMsg, duration: 30000 });
   } finally {
     isUploading.value = false;
     event.target.value = ''; // Reset input
@@ -1550,7 +1600,9 @@ function getVehicleImage(v) {
 
   if (v.imagen_url) {
     if (v.imagen_url.startsWith('http')) return v.imagen_url;
-    return `${import.meta.env.VITE_API_BASE_URL.replace('/api', '')}/storage/${v.imagen_url}`;
+    const path = v.imagen_url.startsWith('/') ? v.imagen_url.slice(1) : v.imagen_url;
+    const finalPath = path.includes('/') ? path : `vehiculos/${path}`;
+    return `${import.meta.env.VITE_API_BASE_URL.replace('/api', '')}/storage/${finalPath}`;
   }
   
   const type = vehicleType(v).toLowerCase();
@@ -1577,7 +1629,8 @@ function getVehicleImage(v) {
 function getVehicleThumbImage(v) {
   if (!v?.imagen_thumb_url) return getVehicleImage(v);
   if (v.imagen_thumb_url.startsWith('http')) return v.imagen_thumb_url;
-  return `${import.meta.env.VITE_API_BASE_URL.replace('/api', '')}/storage/${v.imagen_thumb_url}`;
+  const path = v.imagen_thumb_url.startsWith('/') ? v.imagen_thumb_url.slice(1) : v.imagen_thumb_url;
+  return `${import.meta.env.VITE_API_BASE_URL.replace('/api', '')}/storage/${path}`;
 }
 </script>
 

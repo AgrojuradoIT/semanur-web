@@ -22,7 +22,7 @@
       </div>
       <div class="dropdown-list">
         <div
-          v-for="(item, idx) in filteredItems"
+          v-for="(item, idx) in (loading ? [] : filteredItems)"
           :key="getItemKey(item)"
           class="dropdown-item"
           :class="{ 'dropdown-item-active': searchIndex === idx }"
@@ -30,7 +30,10 @@
         >
           <slot name="option" :item="item">{{ getItemLabel(item) }}</slot>
         </div>
-        <div v-if="filteredItems.length === 0 && !allowFreeText" class="dropdown-empty">
+        <div v-if="loading" class="dropdown-empty">
+          Buscando...
+        </div>
+        <div v-else-if="filteredItems.length === 0 && !allowFreeText" class="dropdown-empty">
           {{ emptyText || 'No se encontraron resultados' }}
         </div>
         <div
@@ -58,9 +61,11 @@ const props = defineProps({
   placeholder: { type: String, default: '' },
   emptyText: { type: String, default: 'No se encontraron resultados' },
   allowFreeText: { type: Boolean, default: false },
+  remoteSearch: { type: Boolean, default: false },
+  loading: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(['update:modelValue', 'select']);
+const emit = defineEmits(['update:modelValue', 'select', 'search']);
 
 const search = ref('');
 const isOpen = ref(false);
@@ -69,6 +74,7 @@ const dropdownRef = ref(null);
 const searchInput = ref(null);
 
 const filteredItems = computed(() => {
+  if (props.remoteSearch) return props.items;
   const q = search.value.trim().toLowerCase();
   if (!q) return props.items;
   return props.items.filter((item) =>
@@ -154,6 +160,10 @@ function handleClickOutside(e) {
 
 onMounted(() => document.addEventListener('click', handleClickOutside));
 onUnmounted(() => document.removeEventListener('click', handleClickOutside));
+
+watch(search, (value) => {
+  if (props.remoteSearch && isOpen.value) emit('search', value);
+});
 </script>
 
 <style scoped>

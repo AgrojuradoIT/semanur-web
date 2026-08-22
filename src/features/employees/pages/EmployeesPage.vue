@@ -194,7 +194,7 @@
               <!-- Resumen Profesional -->
               <section v-if="selectedEmployee.resumen_profesional" style="margin-top: 1.5rem">
                 <h3 class="emp-section-title">Resumen Profesional</h3>
-                <div class="emp-cv-bio" v-html="formatBio(selectedEmployee.resumen_profesional)"></div>
+                <div class="emp-cv-bio">{{ selectedEmployee.resumen_profesional }}</div>
               </section>
 
               <!-- Stats -->
@@ -789,11 +789,6 @@ function getAvatarUrl(path) {
   const baseUrl = apiBase.replace(/\/api\/?$/, '');
   const cleanPath = path.startsWith('storage/') ? path : `storage/${path}`;
   return `${baseUrl}/${cleanPath}`;
-}
-
-function formatBio(text) {
-  if (!text) return '';
-  return text.replace(/\n/g, '<br />');
 }
 
 function formatDate(dateStr) {
