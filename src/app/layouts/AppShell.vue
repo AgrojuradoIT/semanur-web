@@ -172,7 +172,8 @@ import { useRefresh } from '../../shared/composables/useRefresh';
 import { useDynamicIsland } from '../../shared/composables/useDynamicIsland';
 import AboutModal from '../../shared/components/AboutModal.vue';
 import DynamicIsland from '../../shared/components/DynamicIsland.vue';
-import echo from '../../echo';
+import { subscribeToUserNotifications } from '../../echo';
+import { getStoredToken } from '../../shared/auth/session';
 
 const auth = useAuthStore();
 const notifStore = useNotificacionesStore();
@@ -188,6 +189,7 @@ const sidebarOpen = ref(true);
 const profileMenuOpen = ref(false);
 const notifPanelOpen = ref(false);
 const notifContainerRef = ref(null);
+let unsubscribeUserNotifications = () => {};
 
 // Close sidebar on route change only on mobile (≤768px)
 watch(() => route.path, () => {
@@ -252,39 +254,28 @@ onMounted(async () => {
     console.warn('No se pudieron cargar notificaciones:', e);
   }
 
-  // Suscribir a notificaciones en tiempo real vía Reverb
-  if (auth.user?.id) {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      echo.connector.options.auth = {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      };
-      echo.connector.options.authEndpoint = `${import.meta.env.VITE_API_BASE_URL}/broadcasting/auth`;
-      
-      echo.private(`user.${auth.user.id}`)
-        .listen('.NotificationSent', (e) => {
-          // e es la data del evento
-          notifStore.addNotification({
-            id: e.id,
-            title: e.titulo,
-            body: e.mensaje,
-            type: e.prioridad === 'alta' ? 'error' : (e.prioridad === 'media' ? 'warning' : 'info'),
-            alertType: e.tipo,
-            relacionadoId: e.relacionado_id,
-            timestamp: new Date(e.created_at)
-          });
-        });
-    }
-  }
+  // Suscribir solo cuando existen usuario y token de la sesión vigente.
+  unsubscribeUserNotifications = subscribeToUserNotifications({
+    userId: auth.user?.id,
+    token: getStoredToken(),
+    onNotification: (event) => {
+      notifStore.addNotification({
+        id: event.id,
+        title: event.titulo,
+        body: event.mensaje,
+        type: event.prioridad === 'alta' ? 'error' : (event.prioridad === 'media' ? 'warning' : 'info'),
+        alertType: event.tipo,
+        relacionadoId: event.relacionado_id,
+        timestamp: new Date(event.created_at),
+      });
+    },
+  });
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', closeMenus);
-  if (auth.user?.id) {
-    echo.leave(`user.${auth.user.id}`);
-  }
+  unsubscribeUserNotifications();
+  unsubscribeUserNotifications = () => {};
 });
 
 function handleRefresh() {

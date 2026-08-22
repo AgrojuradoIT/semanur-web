@@ -2,7 +2,6 @@ import { createRouter, createWebHashHistory } from 'vue-router';
 
 import AppShell from '../layouts/AppShell.vue';
 import LoginPage from '../../features/auth/pages/LoginPage.vue';
-import DiagnosticPage from '../../pages/DiagnosticPage.vue';
 import DashboardPage from '../../features/dashboard/pages/DashboardPage.vue';
 import InventoryPage from '../../features/inventory/pages/InventoryPage.vue';
 import FleetPage from '../../features/fleet/pages/FleetPage.vue';
@@ -102,12 +101,6 @@ const router = createRouter({
       name: 'login',
       component: LoginPage,
       meta: { title: 'Iniciar Sesion' },
-    },
-    {
-      path: '/diagnostic',
-      name: 'diagnostic',
-      component: DiagnosticPage,
-      meta: { title: 'Diagnóstico' },
     },
     {
       path: '/',
