@@ -85,16 +85,22 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 
+import { subscribeToPedidoAlertas } from '../../../echo';
+import { getStoredToken } from '../../../shared/auth/session';
+import { useAuthStore } from '../../../shared/stores/auth';
 import LineaEstadoBadge from '../components/LineaEstadoBadge.vue';
 import TablePagination from '../../../shared/components/TablePagination.vue';
 import { formatDateTimeCO } from '../../../shared/utils/formatters';
 import { useAlertsInbox } from '../composables/useAlertsInbox';
 import { rutaAlertaTipoPedido } from '../utils/alerts';
+import { handlePedidoAlertaEvent } from '../utils/realtimeAlerts';
 import { estadoPedidoLabel, TIPOS_ALERTA_CONOCIDOS, alertaTipoLabel } from '../utils/orders';
 
-const { state, refresh, markRead } = useAlertsInbox();
+const { state, refresh, markRead, mergeIncoming, refreshUnreadCount } = useAlertsInbox();
+const auth = useAuthStore();
+let unsubscribeRealtime = () => {};
 
 const filtros = reactive({ tipo: '', leida: '' });
 const marcandoId = ref(null);
@@ -137,7 +143,25 @@ async function marcarLeida(alerta) {
   }
 }
 
-onMounted(recargar);
+onMounted(() => {
+  recargar();
+
+  // U11 realtime opt-in: acelera el contador enlazando el canal privado por
+  // destinatario. Si el flag está apagado (default), `subscribeToPedidoAlertas`
+  // devuelve un noop y el polling/refresh manual sigue siendo el camino.
+  // La bandeja persistida es la fuente de verdad; el evento solo trae el
+  // payload mínimo y se reconcilia contra el servidor.
+  unsubscribeRealtime = subscribeToPedidoAlertas({
+    userId: auth.user?.id,
+    token: getStoredToken(),
+    onAlert: (event) => handlePedidoAlertaEvent({ mergeIncoming, refreshUnreadCount }, event),
+  });
+});
+
+onUnmounted(() => {
+  unsubscribeRealtime();
+  unsubscribeRealtime = () => {};
+});
 </script>
 
 <style scoped>

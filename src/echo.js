@@ -1,6 +1,8 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
+import { PEDIDO_ALERTA_EVENT_NAME, pedidoAlertasChannelFor } from './features/inventory-orders/utils/realtimeAlerts';
+import { isInventoryOrdersRealtimeEnabled } from './features/inventory-orders/utils/realtimeFlag';
 import { API_BASE_URL, REALTIME_ENABLED } from './shared/config/runtime';
 
 window.Pusher = Pusher;
@@ -78,4 +80,42 @@ export function disconnectRealtime() {
   echo.disconnect();
   echo = null;
   activeUserId = null;
+}
+
+/**
+ * U11 realtime opt-in de alertas de pedidos (plan sección 12). Mismo contrato
+ * que `subscribeToUserNotifications`, pero sobre el canal privado por
+ * destinatario `pedidos.alertas.{userId}` (nunca `user.{id}` ni el pipeline
+ * legacy) y con doble gate: `REALTIME_ENABLED` global + flag U11
+ * (`VITE_INVENTORY_ORDERS_REALTIME_ENABLED`, default OFF).
+ *
+ * Comparte la instancia Echo de la sesión (mismo token/usuario); no
+ * desconecta el canal legacy. La bandeja persistida sigue siendo la fuente
+ * de verdad: `onAlert` recibe el payload mínimo
+ * ({alert_id, pedido_id, pedido_uuid, tipo, revision}) y el detalle se lee
+ * por la API con Policy.
+ */
+export function leavePedidoAlertasChannel(userId) {
+  if (!echo || !userId) return;
+
+  echo.leave(pedidoAlertasChannelFor(userId));
+}
+
+export function subscribeToPedidoAlertas({ userId, token, onAlert }) {
+  if (!REALTIME_ENABLED || !isInventoryOrdersRealtimeEnabled() || !userId || !token || typeof onAlert !== 'function') {
+    return () => {};
+  }
+
+  if (!echo) {
+    echo = buildEcho(token);
+  }
+
+  echo.private(pedidoAlertasChannelFor(userId)).listen(PEDIDO_ALERTA_EVENT_NAME, onAlert);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    leavePedidoAlertasChannel(userId);
+  };
 }

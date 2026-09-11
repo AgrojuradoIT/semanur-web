@@ -41,8 +41,11 @@ export function createAlertsStore({ api, now = () => new Date().toISOString(), s
   }
 
   async function refreshUnreadCount() {
+    // U11: solo el contador. No toca items/meta para que un ping realtime no
+    // colapse el listado visible; la reconciliación del listado es de refresh().
     try {
-      await refresh({ page: 1, perPage: 1, leida: false });
+      const payload = await api.listAlerts(buildAlertQuery({ page: 1, perPage: 1, leida: false }));
+      state.unreadCount = Number(payload?.meta?.unread_count ?? contarNoLeidas(state.items));
     } catch {
       // La bandeja es recuperable: un fallo del contador no rompe la pantalla.
     }
