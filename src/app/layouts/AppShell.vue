@@ -12,6 +12,7 @@
         <RouterLink v-for="item in operations" :key="item.path" :to="item.path" class="sidebar-item" :class="{ 'active': isItemActive(item.path) }">
           <span class="material-icons-round">{{ item.icon }}</span>
           {{ item.label }}
+          <span v-if="item.badge > 0" class="sidebar-badge" :aria-label="`${item.badge} alertas sin leer`">{{ item.badge > 99 ? '99+' : item.badge }}</span>
         </RouterLink>
 
         <div class="sidebar-section-label" v-if="admin.length">ADMINISTRACION</div>
@@ -174,9 +175,12 @@ import AboutModal from '../../shared/components/AboutModal.vue';
 import DynamicIsland from '../../shared/components/DynamicIsland.vue';
 import { subscribeToUserNotifications } from '../../echo';
 import { getStoredToken } from '../../shared/auth/session';
+import { isInventoryOrdersFeatureEnabled } from '../../features/inventory-orders/utils/flag';
+import { useAlertsInbox } from '../../features/inventory-orders/composables/useAlertsInbox';
 
 const auth = useAuthStore();
 const notifStore = useNotificacionesStore();
+const alertsInbox = useAlertsInbox();
 const router = useRouter();
 const route = useRoute();
 const { islandState, dismiss: dismissIsland, handleAction: handleIslandAction } = useDynamicIsland();
@@ -254,6 +258,9 @@ onMounted(async () => {
     console.warn('No se pudieron cargar notificaciones:', e);
   }
 
+  // U8: contador de la bandeja de pedidos (fuente de verdad: pedido_alertas).
+  if (isInventoryOrdersFeatureEnabled() && auth.hasPermission('pedidos.read')) {
+    alertsInbox.refreshUnreadCount();
   // Suscribir solo cuando existen usuario y token de la sesión vigente.
   unsubscribeUserNotifications = subscribeToUserNotifications({
     userId: auth.user?.id,
@@ -317,7 +324,22 @@ const operations = computed(() => {
     { path: '/scheduler', icon: 'calendar_month', label: 'Programacion', modulo: 'personal' },
   );
 
-  return items.filter(item => auth.canAccessModule(item.modulo));
+  // U8: acceso a pedidos solo con la bandera encendida y permiso de lectura;
+  // el badge muestra las alertas Web persistidas sin leer (no las legacy).
+  if (isInventoryOrdersFeatureEnabled() && auth.hasPermission('pedidos.read')) {
+    items.push({
+      path: '/inventory-orders',
+      icon: 'receipt_long',
+      label: 'Pedidos',
+      modulo: 'inventario',
+      permission: 'pedidos.read',
+      badge: alertsInbox.state.unreadCount,
+    });
+  }
+
+  return items.filter(item => (item.permission
+    ? auth.hasPermission(item.permission)
+    : auth.canAccessModule(item.modulo)));
 });
 
 const admin = computed(() => {
@@ -675,6 +697,15 @@ function updateTheme() {
   min-width: 18px;
   text-align: center;
   line-height: 1.4;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-item:hover .sidebar-badge {
+  transform: scale(1.1);
+}
+
+.sidebar-item:active .sidebar-badge {
+  transform: scale(0.95);
 }
 
 /* Sidebar About Button */
