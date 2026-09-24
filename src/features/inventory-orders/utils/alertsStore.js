@@ -63,15 +63,51 @@ export function createAlertsStore({ api, now = () => new Date().toISOString(), s
       };
     }
 
-    state.unreadCount = contarNoLeidas(state.items);
+    // FIX-4 (#2431.3): el backend puede paginar/filtrar el listado visible,
+    // así que el total sin leer lo manda el servidor. Solo se recalcula en
+    // local cuando la respuesta no trae unread_count (el endpoint read actual
+    // devuelve solo el recurso sin meta).
+    state.unreadCount = pickServerUnread(payload) ?? contarNoLeidas(state.items);
 
     return payload;
   }
 
-  function mergeIncoming(incoming = []) {
-    state.items = mergeUniqueAlerts(state.items, incoming);
+  function mergeIncoming(incoming = [], { matchesFilter = null } = {}) {
+    // FIX-4 (#2431.4): el realtime no conoce los filtros activos de la página
+    // (tipo/leída). Por defecto se mergea como antes; las vistas con filtros
+    // pueden pasar `matchesFilter` para no colar filas que el filtro oculta.
+    // El contador global se reconcilia con el servidor vía refreshUnreadCount.
+    const accepted =
+      typeof matchesFilter === 'function' ? incoming.filter(matchesFilter) : incoming;
+    state.items = mergeUniqueAlerts(state.items, accepted);
     state.unreadCount = contarNoLeidas(state.items);
   }
 
-  return { state, refresh, refreshUnreadCount, markRead, mergeIncoming };
+  function clearInbox() {
+    // FIX-4 (#2431.1): resetea el singleton compartido al cerrar sesión para
+    // que el siguiente usuario no vea la bandeja ajena.
+    state.items = [];
+    state.meta = null;
+    state.unreadCount = 0;
+    state.loaded = false;
+    state.loading = false;
+    state.error = null;
+  }
+
+  return { state, refresh, refreshUnreadCount, markRead, mergeIncoming, clearInbox, reset: clearInbox };
+}
+
+/**
+ * Total sin leer informado por el servidor cuando está presente
+ * (`payload.meta.unread_count` o `payload.unread_count`). Devuelve null si el
+ * servidor lo omite para que el llamador use el conteo local visible.
+ */
+function pickServerUnread(payload) {
+  const raw = payload?.meta?.unread_count ?? payload?.unread_count;
+
+  if (raw === null || raw === undefined) return null;
+
+  const parsed = Number(raw);
+
+  return Number.isNaN(parsed) ? null : parsed;
 }

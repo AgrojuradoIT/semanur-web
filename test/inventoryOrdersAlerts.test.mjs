@@ -80,3 +80,63 @@ test('un fallo del contador no rompe la bandeja', async () => {
   assert.equal(store.state.unreadCount, 0);
   assert.equal(store.state.items.length, 0);
 });
+
+test('FIX-4: markRead conserva el unread_count del servidor cuando viene presente', async () => {
+  const store = createAlertsStore({
+    api: {
+      listAlerts: async () => ({
+        data: [alerta(20), alerta(21), alerta(22)],
+        meta: { current_page: 1, last_page: 2, per_page: 3, total: 6, unread_count: 6 },
+      }),
+      // Servidor con total global (paginado): el conteo visible (2) no manda.
+      readAlert: async () => ({ alerta_id: 20, leida: true, meta: { unread_count: 5 } }),
+    },
+  });
+
+  await store.refresh();
+  assert.equal(store.state.unreadCount, 6);
+
+  await store.markRead(20);
+  assert.equal(store.state.items[0].leida, true);
+  assert.equal(store.state.unreadCount, 5);
+});
+
+test('FIX-4: clearInbox/reset vacía el singleton compartido (logout)', async () => {
+  const store = createAlertsStore({
+    api: {
+      listAlerts: async () => ({
+        data: [alerta(30)],
+        meta: { current_page: 1, last_page: 1, per_page: 25, total: 1, unread_count: 1 },
+      }),
+      readAlert: async () => ({}),
+    },
+  });
+
+  await store.refresh();
+  assert.equal(store.state.items.length, 1);
+  assert.equal(store.state.loaded, true);
+
+  store.clearInbox();
+
+  assert.deepEqual(store.state.items, []);
+  assert.equal(store.state.meta, null);
+  assert.equal(store.state.unreadCount, 0);
+  assert.equal(store.state.loaded, false);
+  assert.equal(store.state.loading, false);
+  assert.equal(store.state.error, null);
+  assert.equal(store.reset, store.clearInbox);
+});
+
+test('FIX-4: mergeIncoming acepta matchesFilter para respetar filtros activos', () => {
+  const store = createAlertsStore({
+    api: { listAlerts: async () => ({ data: [], meta: {} }), readAlert: async () => ({}) },
+  });
+
+  store.mergeIncoming(
+    [alerta(40, { tipo: 'novedad_abierta' }), alerta(41, { tipo: 'pedido_publicado' })],
+    { matchesFilter: (item) => item.tipo === 'novedad_abierta' },
+  );
+
+  assert.deepEqual(store.state.items.map((item) => item.alerta_id), [40]);
+  assert.equal(store.state.unreadCount, 1);
+});

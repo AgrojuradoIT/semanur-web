@@ -56,8 +56,16 @@ export function subscribeToUserNotifications({ userId, token, onNotification }) 
     return () => {};
   }
 
-  disconnectRealtime();
-  echo = buildEcho(token);
+  // FIX-4 (#2431.2): reutiliza la instancia Echo compartida de la sesión en
+  // lugar de llamar a disconnectRealtime(). El teardown total tumbaba también
+  // el canal de alertas de pedidos (subscribeToPedidoAlertas) que comparte
+  // esta instancia; solo se reconstruye al cambiar de usuario.
+  if (!echo) {
+    echo = buildEcho(token);
+  } else if (String(activeUserId) !== String(userId)) {
+    disconnectRealtime();
+    echo = buildEcho(token);
+  }
   activeUserId = userId;
   echo.private(`user.${userId}`).listen('.NotificationSent', onNotification);
 
