@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { fetchFuelRecords } from './fuelService';
 import { formatDateTimeCO } from '../../../shared/utils/formatters';
@@ -34,6 +33,9 @@ export async function exportFuelRecordsToExcel({ fechaDesde, fechaHasta, tipoCom
   const records = response.data || [];
 
   // 2. Create Workbook and Worksheet
+  // exceljs is heavy (~1 MB minified); load it on demand so it never
+  // lands in the entry bundle.
+  const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet('Registros de Combustible');
 

@@ -12,6 +12,7 @@
         <RouterLink v-for="item in operations" :key="item.path" :to="item.path" class="sidebar-item" :class="{ 'active': isItemActive(item.path) }">
           <span class="material-icons-round">{{ item.icon }}</span>
           {{ item.label }}
+          <span v-if="item.badge > 0" class="sidebar-badge" :aria-label="`${item.badge} alertas sin leer`">{{ item.badge > 99 ? '99+' : item.badge }}</span>
         </RouterLink>
 
         <div class="sidebar-section-label" v-if="admin.length">ADMINISTRACION</div>
@@ -49,13 +50,23 @@
           </button>
         </div>
         <div class="header-right">
-          <button class="btn-icon" title="Actualizar" @click="handleRefresh">
+          <button
+            class="btn-icon header-btn header-btn-refresh"
+            :class="{ 'is-refreshing': isRefreshing }"
+            title="Actualizar"
+            @click="handleRefresh"
+          >
             <span class="material-icons-round">refresh</span>
           </button>
 
           <!-- Panel de Notificaciones -->
           <div class="notif-container" ref="notifContainerRef">
-            <button class="btn-icon" title="Notificaciones" @click="toggleNotifPanel" style="position: relative;">
+            <button
+              class="btn-icon header-btn header-btn-notif"
+              title="Notificaciones"
+              @click="toggleNotifPanel"
+              style="position: relative;"
+            >
               <span class="material-icons-round">notifications</span>
               <span v-if="notifStore.unreadCount > 0" class="notification-badge">
                 {{ notifStore.unreadCount > 9 ? '9+' : notifStore.unreadCount }}
@@ -107,12 +118,20 @@
             </div>
           </div>
 
-          <button class="btn-icon" :title="isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'" @click="toggleTheme">
+          <button
+            class="btn-icon header-btn header-btn-theme"
+            :title="isDark ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'"
+            @click="toggleTheme"
+          >
             <span class="material-icons-round">{{ isDark ? 'light_mode' : 'dark_mode' }}</span>
           </button>
 
           <div class="header-profile-container">
-            <div class="header-user" @click="toggleProfileMenu">
+            <div
+              class="header-user"
+              :class="{ 'is-open': profileMenuOpen }"
+              @click="toggleProfileMenu"
+            >
               <div class="header-avatar">
                 <span class="material-icons-round">person</span>
               </div>
@@ -120,7 +139,7 @@
                 <span class="header-user-name">{{ auth.user?.name || 'Usuario' }}</span>
                 <span class="header-user-role">{{ auth.user?.email || 'usuario@semanur.com' }}</span>
               </div>
-              <span class="material-icons-round" style="color: var(--text-gray); margin-left: 4px; font-size: 18px;">expand_more</span>
+              <span class="material-icons-round header-chevron" style="color: var(--text-gray); margin-left: 4px; font-size: 18px;">expand_more</span>
             </div>
 
             <div v-if="profileMenuOpen" class="profile-dropdown">
@@ -165,33 +184,50 @@
 
 <script setup>
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
-import { useRouter, useRoute } from 'vue-router';
+import { useRouter, useRoute, RouterLink, RouterView } from 'vue-router';
 import { useAuthStore } from '../../shared/stores/auth';
 import { useNotificacionesStore } from '../../shared/stores/notificaciones';
 import { useRefresh } from '../../shared/composables/useRefresh';
 import { useDynamicIsland } from '../../shared/composables/useDynamicIsland';
 import AboutModal from '../../shared/components/AboutModal.vue';
 import DynamicIsland from '../../shared/components/DynamicIsland.vue';
-import echo from '../../echo';
+import { subscribeToUserNotifications } from '../../echo';
+import { useAlertsInbox } from '../../features/inventory-orders/composables/useAlertsInbox';
+import { getStoredToken } from '../../shared/auth/session';
 
 const auth = useAuthStore();
 const notifStore = useNotificacionesStore();
+// FIX-4 (#2431.1): reseteo de la bandeja compartida para limpiarla en logout.
+const { clearInbox: clearAlertsInbox } = useAlertsInbox();
 const router = useRouter();
 const route = useRoute();
-const { islandState, dismiss: dismissIsland, handleAction: handleIslandAction } = useDynamicIsland();
+const { islandState, notify: islandNotify, dismiss: dismissIsland, handleAction: handleIslandAction } = useDynamicIsland();
 const { triggerRefresh } = useRefresh();
 
 // About Modal
 const showAboutModal = ref(false);
-const sidebarOpen = ref(true);
+const isMobileScreen = () => typeof window !== 'undefined' && window.innerWidth <= 768;
+const sidebarOpen = ref(!isMobileScreen());
 
 const profileMenuOpen = ref(false);
 const notifPanelOpen = ref(false);
 const notifContainerRef = ref(null);
+let unsubscribeUserNotifications = () => {};
+
+let wasMobile = isMobileScreen();
+function handleWindowResize() {
+  const currentMobile = isMobileScreen();
+  if (currentMobile && !wasMobile) {
+    sidebarOpen.value = false;
+  } else if (!currentMobile && wasMobile) {
+    sidebarOpen.value = true;
+  }
+  wasMobile = currentMobile;
+}
 
 // Close sidebar on route change only on mobile (≤768px)
 watch(() => route.path, () => {
-  if (window.innerWidth <= 768) {
+  if (isMobileScreen()) {
     sidebarOpen.value = false;
   }
 });
@@ -234,16 +270,20 @@ function prioridadClass(prioridad) {
 
 onMounted(async () => {
   document.addEventListener('click', closeMenus);
+  window.addEventListener('resize', handleWindowResize);
+
+  // Inicializar tema de inmediato antes de cualquier llamada asíncrona
+  const savedTheme = localStorage.getItem('theme');
+  if (savedTheme === 'light' || document.documentElement.classList.contains('light-mode')) {
+    isDark.value = false;
+    updateTheme();
+  } else {
+    isDark.value = true;
+    updateTheme();
+  }
 
   // Refrescar usuario para tener los últimos permisos de DB
   await auth.refreshUser();
-  
-  // Inicializar tema
-  const savedTheme = localStorage.getItem('theme');
-  if (savedTheme === 'light') {
-    isDark.value = false;
-    updateTheme();
-  }
 
   // Cargar notificaciones (no bloquear si falla)
   try {
@@ -252,43 +292,52 @@ onMounted(async () => {
     console.warn('No se pudieron cargar notificaciones:', e);
   }
 
-  // Suscribir a notificaciones en tiempo real vía Reverb
-  if (auth.user?.id) {
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      echo.connector.options.auth = {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      };
-      echo.connector.options.authEndpoint = `${import.meta.env.VITE_API_BASE_URL}/broadcasting/auth`;
-      
-      echo.private(`user.${auth.user.id}`)
-        .listen('.NotificationSent', (e) => {
-          // e es la data del evento
-          notifStore.addNotification({
-            id: e.id,
-            title: e.titulo,
-            body: e.mensaje,
-            type: e.prioridad === 'alta' ? 'error' : (e.prioridad === 'media' ? 'warning' : 'info'),
-            alertType: e.tipo,
-            relacionadoId: e.relacionado_id,
-            timestamp: new Date(e.created_at)
-          });
-        });
-    }
-  }
+  // Suscribir solo cuando existen usuario y token de la sesión vigente.
+  unsubscribeUserNotifications = subscribeToUserNotifications({
+    userId: auth.user?.id,
+    token: getStoredToken(),
+    onNotification: (event) => {
+      const notifType = event.prioridad === 'alta' ? 'error' : (event.prioridad === 'media' ? 'warning' : 'info');
+      notifStore.addNotification({
+        id: event.id,
+        title: event.titulo,
+        body: event.mensaje,
+        type: notifType,
+        alertType: event.tipo,
+        relacionadoId: event.relacionado_id,
+        timestamp: new Date(event.created_at || Date.now()),
+      });
+
+      const targetRoute = notifStore.rutaPorNotificacion(event.tipo, event.relacionado_id) || '/notifications';
+
+      islandNotify({
+        type: notifType,
+        title: event.titulo || 'Nueva Notificación',
+        message: event.mensaje || '',
+        actionLabel: 'Ver',
+        onAction: () => {
+          router.push(targetRoute);
+        },
+      });
+    },
+  });
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', closeMenus);
-  if (auth.user?.id) {
-    echo.leave(`user.${auth.user.id}`);
-  }
+  window.removeEventListener('resize', handleWindowResize);
+  unsubscribeUserNotifications();
+  unsubscribeUserNotifications = () => {};
 });
 
+const isRefreshing = ref(false);
+
 function handleRefresh() {
+  isRefreshing.value = true;
   triggerRefresh();
+  setTimeout(() => {
+    isRefreshing.value = false;
+  }, 650);
 }
 
 function handleManageProfile() {
@@ -326,7 +375,9 @@ const operations = computed(() => {
     { path: '/scheduler', icon: 'calendar_month', label: 'Programacion', modulo: 'personal' },
   );
 
-  return items.filter(item => auth.canAccessModule(item.modulo));
+  return items.filter(item => (item.permission
+    ? auth.hasPermission(item.permission)
+    : auth.canAccessModule(item.modulo)));
 });
 
 const admin = computed(() => {
@@ -342,50 +393,67 @@ const admin = computed(() => {
 });
 
 async function onLogout() {
+  // FIX-4 (#2431.1): vacía la bandeja compartida para que el siguiente
+  // usuario no vea el inbox ajeno. El corte realtime lo hace auth.logout()
+  // (disconnectRealtime); aquí solo se suelta la suscripción legacy local.
+  clearAlertsInbox();
+  unsubscribeUserNotifications();
+  unsubscribeUserNotifications = () => {};
   await auth.logout();
   router.replace('/login');
 }
 
 // Theme Management
-const isDark = ref(true);
+const isDark = ref(
+  localStorage.getItem('theme') !== 'light' &&
+    !document.documentElement.classList.contains('light-mode')
+);
 
 function toggleTheme(event) {
+  const nextDark = !isDark.value;
+
   if (!document.startViewTransition) {
-    isDark.value = !isDark.value;
+    isDark.value = nextDark;
     updateTheme();
     return;
   }
 
-  const rect = event.currentTarget.getBoundingClientRect();
-  const x = rect.left + rect.width / 2;
-  const y = rect.top + rect.height / 2;
+  const btn = event?.currentTarget || event?.target;
+  const rect = btn?.getBoundingClientRect ? btn.getBoundingClientRect() : null;
+  const x = rect ? rect.left + rect.width / 2 : window.innerWidth / 2;
+  const y = rect ? rect.top + rect.height / 2 : 0;
 
   const endRadius = Math.hypot(
     Math.max(x, window.innerWidth - x),
     Math.max(y, window.innerHeight - y)
   );
 
-  const transition = document.startViewTransition(() => {
-    isDark.value = !isDark.value;
-    updateTheme();
-  });
+  try {
+    const transition = document.startViewTransition(() => {
+      isDark.value = nextDark;
+      updateTheme();
+    });
 
-  transition.ready.then(() => {
-    // Animate circular clipPath
-    document.documentElement.animate(
-      {
-        clipPath: [
-          `circle(0px at ${x}px ${y}px)`,
-          `circle(${endRadius}px at ${x}px ${y}px)`
-        ]
-      },
-      {
-        duration: 500,
-        easing: 'ease-in-out',
-        pseudoElement: '::view-transition-new(root)'
-      }
-    );
-  });
+    transition.ready.then(() => {
+      // Animate circular clipPath
+      document.documentElement.animate(
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${endRadius}px at ${x}px ${y}px)`
+          ]
+        },
+        {
+          duration: 500,
+          easing: 'ease-in-out',
+          pseudoElement: '::view-transition-new(root)'
+        }
+      );
+    }).catch(() => {});
+  } catch {
+    isDark.value = nextDark;
+    updateTheme();
+  }
 }
 
 function updateTheme() {
@@ -684,6 +752,15 @@ function updateTheme() {
   min-width: 18px;
   text-align: center;
   line-height: 1.4;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-item:hover .sidebar-badge {
+  transform: scale(1.1);
+}
+
+.sidebar-item:active .sidebar-badge {
+  transform: scale(0.95);
 }
 
 /* Sidebar About Button */
@@ -691,15 +768,26 @@ function updateTheme() {
   width: 100%;
   text-align: left;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.2s ease;
 }
 
 .sidebar-about-btn:hover {
   background: var(--surface-2);
+  transform: translateX(4px);
+}
+
+.sidebar-about-btn:active {
+  transform: scale(0.96) translateX(2px);
 }
 
 .sidebar-about-btn .material-icons-round {
   color: var(--primary);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.sidebar-about-btn:hover .material-icons-round {
+  transform: scale(1.12);
 }
 
 .sidebar-about-text {
@@ -750,6 +838,208 @@ function updateTheme() {
 
   .page-content {
     padding: var(--sp-md);
+  }
+}
+
+/* ── Header Interactive Buttons & Animations ── */
+.header-btn {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.2s ease,
+              box-shadow 0.25s ease,
+              color 0.2s ease;
+  cursor: pointer;
+  position: relative;
+  will-change: transform;
+  overflow: hidden;
+}
+
+.header-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle, var(--primary-20) 20%, transparent 70%);
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.header-btn:hover {
+  transform: translateY(-2px);
+  background: var(--surface-3);
+  color: var(--text-main);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Pressed / Active state on click */
+.header-btn:active {
+  transform: translateY(1px) scale(0.90);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 2px 4px rgba(0, 0, 0, 0.15);
+  background: var(--surface-2);
+  transition-duration: 0.08s;
+}
+
+.header-btn:active::after {
+  opacity: 1;
+  transform: scale(1.4);
+  transition: 0s;
+}
+
+/* 1. Refresh Button: Smooth Spin on Hover & Instant Twist on Click */
+.header-btn-refresh .material-icons-round {
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+
+.header-btn-refresh:hover .material-icons-round {
+  transform: rotate(180deg);
+}
+
+.header-btn-refresh:active .material-icons-round {
+  transform: rotate(360deg) scale(0.82);
+  transition: transform 0.1s ease-out;
+}
+
+.header-btn-refresh.is-refreshing .material-icons-round {
+  animation: spin-click 0.65s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes spin-click {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 2. Notification Bell: Ringing swing on Hover & Tilt-compression on Click */
+.header-btn-notif .material-icons-round {
+  transform-origin: top center;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+
+.header-btn-notif:hover .material-icons-round {
+  animation: bell-swing 0.75s ease-in-out;
+}
+
+.header-btn-notif:active .material-icons-round {
+  animation: none;
+  transform: rotate(-18deg) scale(0.82);
+  transition: transform 0.08s ease-out;
+}
+
+@keyframes bell-swing {
+  0% { transform: rotate(0); }
+  15% { transform: rotate(14deg); }
+  30% { transform: rotate(-12deg); }
+  45% { transform: rotate(8deg); }
+  60% { transform: rotate(-6deg); }
+  75% { transform: rotate(3deg); }
+  100% { transform: rotate(0); }
+}
+
+.header-btn-notif:hover .notification-badge {
+  animation: badge-pulse 0.5s ease-in-out;
+}
+
+.header-btn-notif:active .notification-badge {
+  transform: scale(0.85);
+  transition: transform 0.08s ease-out;
+}
+
+@keyframes badge-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
+}
+
+/* 3. Theme Toggle (Sun/Moon): Rotation on Hover & Snap Spin on Click */
+.header-btn-theme .material-icons-round {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.25s ease;
+  will-change: transform;
+}
+
+.header-btn-theme:hover .material-icons-round {
+  transform: rotate(20deg) scale(1.15);
+  color: var(--primary);
+}
+
+.header-btn-theme:active .material-icons-round {
+  transform: rotate(90deg) scale(0.80);
+  color: var(--primary-hover);
+  transition: transform 0.1s ease-out, color 0.1s ease;
+}
+
+/* 4. User Profile Dropdown Pill */
+.header-user {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 0.2s ease,
+              box-shadow 0.25s ease;
+  user-select: none;
+  cursor: pointer;
+  will-change: transform;
+}
+
+.header-user:hover {
+  transform: translateY(-2px);
+  background: var(--surface-2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.header-user:active {
+  transform: translateY(1px) scale(0.96);
+  background: var(--surface-3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  transition-duration: 0.08s;
+}
+
+.header-user .header-avatar {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.3s ease;
+  will-change: transform;
+}
+
+.header-user:hover .header-avatar {
+  transform: scale(1.08);
+  box-shadow: 0 0 0 3px var(--primary-20);
+}
+
+.header-user:active .header-avatar {
+  transform: scale(0.92);
+  box-shadow: 0 0 0 1px var(--primary-20);
+  transition-duration: 0.08s;
+}
+
+.header-chevron {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.2s ease;
+  display: inline-block;
+  will-change: transform;
+}
+
+.header-user:hover .header-chevron {
+  transform: translateY(2px);
+  color: var(--text-main) !important;
+}
+
+.header-user:active .header-chevron {
+  transform: translateY(4px) scale(0.9);
+  transition-duration: 0.08s;
+}
+
+.header-user.is-open .header-chevron {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .header-btn,
+  .header-btn::after,
+  .header-btn-refresh .material-icons-round,
+  .header-btn-notif .material-icons-round,
+  .header-btn-theme .material-icons-round,
+  .header-user,
+  .header-user .header-avatar,
+  .header-chevron {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
   }
 }
 </style>

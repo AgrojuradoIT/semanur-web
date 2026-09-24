@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { disconnectRealtime } from '../../echo';
 import http from '../api/http';
 import {
   clearStoredSession,
@@ -46,6 +47,7 @@ export const useAuthStore = defineStore('auth', {
       persistStoredSession(token, user);
     },
     clearSession() {
+      disconnectRealtime();
       this.token = null;
       this.user = null;
       this.error = null;
@@ -74,6 +76,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async logout() {
+      disconnectRealtime();
       try {
         if (this.token) {
           await http.post('/logout');

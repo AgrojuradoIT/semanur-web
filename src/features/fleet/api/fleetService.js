@@ -47,11 +47,7 @@ export async function createVehicleDocument(vehicleId, documentData) {
     formData.append('certificado_pdf', documentData.certificado_pdf);
   }
 
-  const { data } = await http.post(`/vehiculos/${vehicleId}/documentos`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const { data } = await http.post(`/vehiculos/${vehicleId}/documentos`, formData);
   return data;
 }
 
@@ -70,10 +66,6 @@ export async function uploadVehicleImage(vehicleId, file) {
   formData.append('imagen', file);
   formData.append('vehiculo_id', vehicleId);
 
-  const { data } = await http.post('/vehiculos/imagen', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  const { data } = await http.post('/vehiculos/imagen', formData);
   return data;
 }

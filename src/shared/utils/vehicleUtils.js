@@ -70,3 +70,37 @@ export function remainingUntilMaintenance(vehicle) {
   if (!next || next === 0) return null;
   return Math.round(next - current);
 }
+
+/**
+ * Resolves the displayable image URL or category illustration fallback for a vehicle.
+ */
+export function getVehicleImageUrl(vehicle) {
+  if (!vehicle) return '/fleet/generic.png';
+
+  const rawUrl = vehicle.imagen_thumb_url || vehicle.imagen_url;
+  if (rawUrl) {
+    if (rawUrl.startsWith('http')) return rawUrl;
+    const path = rawUrl.startsWith('/') ? rawUrl.slice(1) : rawUrl;
+    const finalPath = path.includes('/') ? path : `vehiculos/${path}`;
+    return `${import.meta.env.VITE_API_BASE_URL.replace('/api', '')}/storage/${finalPath}`;
+  }
+
+  const type = (typeof vehicle === 'string' ? vehicle : vehicle?.tipo || '').toLowerCase();
+  if (type.includes('tractor') || type.includes('camion') || type.includes('mula')) {
+    return '/fleet/tractor.png';
+  }
+  if (type.includes('volqueta')) {
+    return '/fleet/volqueta.png';
+  }
+  if (type.includes('camioneta') || type.includes('pickup')) {
+    return '/fleet/camioneta.png';
+  }
+  if (type.includes('moto')) {
+    return '/fleet/moto.png';
+  }
+  if (type.includes('maquinaria') || type.includes('excavadora')) {
+    return '/fleet/maquinaria.png';
+  }
+
+  return '/fleet/generic.png';
+}

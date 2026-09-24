@@ -4,24 +4,23 @@
     <div class="table-header inventory-top-bar">
       <!-- Columna Izquierda: Título/Categorías y Búsqueda/Acciones -->
       <div class="inventory-controls-col">
-        <!-- Fila 1: Título y Categorías -->
+        <!-- Fila 1: Título y Badge de Filtro Activo -->
         <div class="inventory-title-row">
           <h3 class="table-title">GESTION DE INVENTARIO</h3>
-          <div class="filter-chips">
-            <button
-              v-for="chip in categoryChips"
-              :key="chip"
-              class="chip"
-              :class="{ active: selectedCategory === chip }"
-              @click="selectedCategory = chip"
-            >
-              {{ chip }}
-            </button>
+          <div
+            v-if="selectedCategoryId !== 'all'"
+            class="active-filter-badge"
+            @click="selectedCategoryId = 'all'"
+            title="Quitar filtro de categoría"
+          >
+            <span class="material-icons-round" style="font-size: 15px;">filter_alt</span>
+            <span>Categoría: <strong>{{ selectedCategoryLabel }}</strong></span>
+            <span class="material-icons-round badge-clear">close</span>
           </div>
         </div>
 
-        <!-- Fila 2: Búsqueda y Botones de Acción -->
-        <div class="table-actions" style="flex-wrap: wrap">
+        <!-- Fila 2: Búsqueda, Filtro de Categoría y Botones de Acción -->
+        <div class="table-actions" style="flex-wrap: wrap; gap: 10px;">
           <div class="table-search">
             <span class="material-icons-round">search</span>
             <input
@@ -31,6 +30,22 @@
               @keyup.enter="onSearchEnter"
             />
           </div>
+
+          <!-- Selector de Filtro de Categoría con ícono -->
+          <div class="category-filter-select">
+            <div class="filter-icon-prefix">
+              <span class="material-icons-round">filter_alt</span>
+            </div>
+            <SearchableSelect
+              v-model="selectedCategoryId"
+              :items="categoryFilterOptions"
+              label-field="label"
+              value-field="value"
+              placeholder="Filtrar por categoría..."
+              empty-text="No se encontraron categorías"
+            />
+          </div>
+
           <button v-if="canManageInventory" class="btn btn-secondary btn-sm" @click="openCsvModal">
             <span class="material-icons-round" style="font-size: 18px">upload_file</span>
             IMPORTAR CSV
@@ -231,17 +246,28 @@
             <label>Alerta Stock Mínimo</label>
             <input v-model="productForm.producto_alerta_stock_minimo" type="number" step="0.01" class="input" required />
           </div>
-          <div class="input-group">
-            <label>Capacidad Máxima (Opcional)</label>
-            <input v-model="productForm.capacidad_maxima" type="number" step="0.01" class="input" placeholder="Ej. 10000" />
+          <div v-if="!editingProductId" class="input-group">
+            <label>Saldo Inicial</label>
+            <input v-model="productForm.saldo_inicial" type="number" step="0.01" min="0" class="input" placeholder="0" />
+          </div>
+          <div v-if="!editingProductId" class="input-group">
+            <label>Bodega (Destino Saldo Inicial)</label>
+            <SearchableSelect
+              v-model="productForm.bodega_id"
+              :items="bodegas"
+              label-field="nombre"
+              value-field="bodega_id"
+              placeholder="Seleccionar bodega..."
+              empty-text="No se encontraron bodegas"
+            />
           </div>
           <div class="input-group">
             <label>Precio de Costo</label>
             <input v-model="productForm.producto_precio_costo" type="number" step="0.01" class="input" />
           </div>
-          <div class="input-group full-width">
-            <label>Ubicación (Estante/Bodega)</label>
-            <input v-model="productForm.producto_ubicacion" type="text" class="input" />
+          <div class="input-group" :class="{ 'full-width': editingProductId }">
+            <label>Ubicación en Estante / Pasillo (Opcional)</label>
+            <input v-model="productForm.producto_ubicacion" type="text" class="input" placeholder="Ej. Pasillo 2, Estante B-4" />
           </div>
         </form>
       </div>
@@ -293,16 +319,32 @@
             <label>Producto</label>
             <SearchableSelect
               v-model="movementForm.producto_id"
-              :items="filteredProducts"
+              :items="movementProductOptions"
               :label-fn="(p) => `${p.referencia_fabrica || p.producto_nombre || ''} - ${p.producto_nombre || ''}`.trim()"
               :value-fn="(p) => p.producto_id || p.id"
+              :remote-search="true"
+              :loading="movementProductSearchLoading"
               placeholder="Seleccionar producto..."
+              empty-text="Escribí al menos 2 caracteres para buscar en todo el inventario"
+              @search="onMovementProductSearch"
+              @select="onMovementProductSelect"
             />
             <div v-if="selectedMovementProduct && movementForm.transaccion_tipo === 'salida'" class="movement-stock-warning" :class="{ 'stock-zero': selectedMovementProduct.producto_stock_actual <= 0 }">
               <span class="material-icons-round">{{ selectedMovementProduct.producto_stock_actual <= 0 ? 'warning' : 'inventory_2' }}</span>
               Stock disponible: <strong>{{ selectedMovementProduct.producto_stock_actual ?? 0 }}</strong>
               <span v-if="selectedMovementProduct.producto_stock_actual <= 0" style="color: var(--danger);"> — No hay stock para esta salida</span>
             </div>
+          </div>
+          <div class="input-group">
+            <label>Bodega</label>
+            <SearchableSelect
+              v-model="movementForm.bodega_id"
+              :items="bodegas"
+              label-field="nombre"
+              value-field="bodega_id"
+              placeholder="Seleccionar bodega..."
+              empty-text="No se encontraron bodegas"
+            />
           </div>
           <div class="input-group" v-if="movementForm.transaccion_tipo === 'salida'">
             <label>Entregado a (Empleado)</label>
@@ -365,13 +407,22 @@
             </option>
           </select>
         </div>
+        <div class="input-group" style="margin-bottom: 12px;">
+          <label>Bodega destino</label>
+          <select v-model="csvBodegaId" class="input" required>
+            <option value="">Seleccionar...</option>
+            <option v-for="bodega in bodegas" :key="bodega.bodega_id || bodega.id" :value="bodega.bodega_id || bodega.id">
+              {{ bodega.nombre }}{{ bodega.tipo ? ` (${bodega.tipo})` : '' }}
+            </option>
+          </select>
+        </div>
         <div class="input-group">
           <input type="file" accept=".csv,.xlsx,.xls" class="input" @change="onFileChange" />
         </div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" :disabled="saving" @click="closeCsvModal">Cancelar</button>
-        <button class="btn btn-primary" :disabled="saving || !csvFile" @click="submitCsv">
+        <button class="btn btn-primary" :disabled="saving || !csvFile || !csvBodegaId" @click="submitCsv">
           <span class="material-icons-round" style="font-size: 18px">upload</span>
           {{ saving ? 'SUBIENDO...' : 'IMPORTAR' }}
         </button>
@@ -383,7 +434,7 @@
   <div
     v-if="showPurchasesPreviewModal && purchasesPreview"
     class="modal-overlay"
-    @click.self="showPurchasesPreviewModal = false"
+    @click.self="closePurchasesPreview"
   >
     <div class="modal" style="width: 960px; max-width: 95vw; position: relative;">
       <!-- Loading overlay confirmación -->
@@ -398,7 +449,7 @@
       </div>
       <div class="modal-header">
         <h3>PREVISUALIZAR IMPORTACIÓN DE COMPRAS</h3>
-        <button class="modal-close" @click="showPurchasesPreviewModal = false">
+        <button class="modal-close" @click="closePurchasesPreview">
           <span class="material-icons-round" style="font-size: 18px">close</span>
         </button>
       </div>
@@ -412,6 +463,9 @@
           </div>
           <div class="badge badge-neutral">
             Filas: {{ purchasesPreview.summary?.total_rows || 0 }}
+          </div>
+          <div class="badge badge-neutral">
+            Bodega: {{ purchasesPreviewWarehouseName }}
           </div>
         </div>
 
@@ -485,8 +539,12 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-secondary" @click="showPurchasesPreviewModal = false">Cancelar</button>
-        <button class="btn btn-primary" :disabled="saving" @click="confirmPurchasesImport">
+        <button class="btn btn-secondary" @click="closePurchasesPreview">Cancelar</button>
+        <button
+          class="btn btn-primary"
+          :disabled="saving || purchasesPreview.requires_confirmation === false || !purchasesIdempotencyKey"
+          @click="confirmPurchasesImport"
+        >
           <span class="material-icons-round" style="font-size: 18px">check_circle</span>
           {{ saving ? 'APLICANDO...' : 'CONFIRMAR IMPORTACIÓN' }}
         </button>
@@ -577,13 +635,23 @@
         </div>
 
         <!-- Recent Movements -->
-        <div class="pd-movements" v-if="productMovements.length > 0">
+        <div v-if="productMovementsLoading" class="page-loading pd-movements-state">
+          <span class="spinner"></span>
+          Cargando movimientos...
+        </div>
+
+        <div v-else-if="productMovementsError" class="empty-state pd-movements-state pd-movements-state--error">
+          <span class="material-icons-round">lock</span>
+          <p>{{ productMovementsError }}</p>
+        </div>
+
+        <div class="pd-movements" v-else-if="productMovements.length > 0">
           <div class="pd-movements-header">
             <h3 class="pd-section-title" style="margin-bottom: 0;">
               <span class="material-icons-round" style="font-size: 16px;">history</span>
               Movimientos Recientes
             </h3>
-            <span class="pd-movements-count">{{ productMovements.length }} {{ productMovements.length === 1 ? 'registro' : 'registros' }}</span>
+            <span class="pd-movements-count">{{ productMovementsTotal }} {{ productMovementsTotal === 1 ? 'registro' : 'registros' }}</span>
           </div>
           <div class="pd-movements-table" :class="{ 'pd-movements-table--expanded': showAllMovements }">
             <table>
@@ -625,6 +693,11 @@
           </div>
         </div>
 
+        <div v-else class="empty-state pd-movements-state">
+          <span class="material-icons-round">history_toggle_off</span>
+          <p>Este producto todavía no tiene movimientos.</p>
+        </div>
+
         <!-- Action Buttons -->
         <div class="pd-actions">
           <button class="pd-btn-secondary" @click="closeDetailModal">
@@ -635,11 +708,11 @@
             <span class="material-icons-round" style="font-size: 16px;">sync_alt</span>
             REGISTRAR MOVIMIENTO
           </button>
-          <button v-if="canManageInventory" class="pd-btn-primary" style="background: var(--warning);" @click="editProduct(selectedProduct)">
+          <button v-if="canEditInventory" class="pd-btn-primary" style="background: var(--warning);" @click="editProduct(selectedProduct)">
             <span class="material-icons-round" style="font-size: 16px;">edit</span>
             EDITAR
           </button>
-          <button v-if="canManageInventory" class="pd-btn-primary" style="background: var(--danger);" @click="confirmDeleteProduct(selectedProduct)">
+          <button v-if="canEditInventory" class="pd-btn-primary" style="background: var(--danger);" @click="confirmDeleteProduct(selectedProduct)">
             <span class="material-icons-round" style="font-size: 16px;">delete</span>
             ELIMINAR
           </button>
@@ -663,9 +736,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { useAsyncState } from '../../../shared/composables/useAsyncState';
 import { formatCurrencyCO, formatNumber } from '../../../shared/utils/formatters';
 import SearchableSelect from '../../../shared/components/SearchableSelect.vue';
 import {
@@ -685,12 +757,14 @@ import http from '../../../shared/api/http';
 import { extractList } from '../../../shared/utils/apiResponse';
 import {
   fetchInventoryProducts,
+  fetchInventoryMovements,
+  fetchCategories,
+  fetchBodegas,
   searchInventoryProducts,
   createProduct,
   updateProduct,
   deleteProduct,
   createMovement,
-  uploadCsv,
   uploadPurchasesPreview,
   uploadPurchasesConfirm,
 } from '../api/inventoryService';
@@ -701,6 +775,7 @@ import { useAuthStore } from '../../../shared/stores/auth';
 const auth = useAuthStore();
 const canManageInventory = computed(() => auth.hasPermission('inventario.write'));
 const canManageMovements = computed(() => auth.hasPermission('movimientos.write'));
+const canEditInventory = computed(() => auth.isAdmin && auth.hasPermission('inventario.write'));
 
 const { refreshTrigger, triggerRefresh } = useRefresh();
 const { notify: islandNotify } = useDynamicIsland();
@@ -708,14 +783,16 @@ const { notify: islandNotify } = useDynamicIsland();
 const router = useRouter();
 const route = useRoute();
 
-const { loading, error, run } = useAsyncState('');
+const loading = ref(false);
+const error = ref('');
 const search = ref('');
-const selectedCategory = ref('Todos');
+const selectedCategoryId = ref('all');
 const allProducts = ref([]);
 const currentPage = ref(1);
 const totalPages = ref(1);
 const totalItems = ref(0);
 const metrics = ref(null);
+const activeAnimationFrames = new Set();
 
 function useAnimatedNumber(sourceRef) {
   const displayValue = ref(0);
@@ -729,7 +806,10 @@ function useAnimatedNumber(sourceRef) {
       const startTime = performance.now();
       const duration = 750;
 
-      if (animationFrame) cancelAnimationFrame(animationFrame);
+      if (animationFrame) {
+        cancelAnimationFrame(animationFrame);
+        activeAnimationFrames.delete(animationFrame);
+      }
 
       function step(now) {
         const elapsed = now - startTime;
@@ -738,13 +818,18 @@ function useAnimatedNumber(sourceRef) {
         displayValue.value = Math.round(start + (target - start) * ease);
 
         if (progress < 1) {
+          activeAnimationFrames.delete(animationFrame);
           animationFrame = requestAnimationFrame(step);
+          activeAnimationFrames.add(animationFrame);
         } else {
+          activeAnimationFrames.delete(animationFrame);
+          animationFrame = null;
           displayValue.value = target;
         }
       }
 
       animationFrame = requestAnimationFrame(step);
+      activeAnimationFrames.add(animationFrame);
     },
     { immediate: true }
   );
@@ -757,15 +842,19 @@ const lowStockSource = computed(() => metrics.value?.low_stock ?? 0);
 const animatedTotalProducts = useAnimatedNumber(totalProductsSource);
 const animatedLowStock = useAnimatedNumber(lowStockSource);
 
-// Categorias dummy para el formulario. Lo ideal sería un endpoint, pero se simplifica con quemados o sacados de props.
-const categories = ref([
-  { categoria_id: 1, nombre: 'Repuestos' },
-  { categoria_id: 2, nombre: 'Tornilleria' },
-  { categoria_id: 3, nombre: 'Lubricantes' },
-  { categoria_id: 4, nombre: 'Combustible' },
-  { categoria_id: 5, nombre: 'Herramientas' },
+const categories = ref([]);
+const bodegas = ref([]);
+const categoryFilterOptions = computed(() => [
+  { value: 'all', label: 'Todas las categorías' },
+  ...categories.value.map((c) => ({
+    value: String(c.categoria_id || c.id),
+    label: c.nombre || c.categoria_nombre,
+  })),
 ]);
-const categoryChips = ['Todos', 'Repuestos', 'Tornilleria', 'Lubricantes', 'Combustible', 'Herramientas'];
+const selectedCategoryLabel = computed(() => (
+  categoryFilterOptions.value.find((option) => String(option.value) === String(selectedCategoryId.value))?.label
+  || 'Todas las categorías'
+));
 
 // Modals State
 const showProductModal = ref(false);
@@ -774,10 +863,16 @@ const showCsvModal = ref(false);
 const showDetailModal = ref(false);
 const selectedProduct = ref(null);
 const productMovements = ref([]);
+const productMovementsTotal = ref(0);
+const productMovementsLoading = ref(false);
+const productMovementsError = ref('');
 const showAllMovements = ref(false);
 const empleados = ref([]);
 const saving = ref(false);
 const editingProductId = ref(null);
+const movementProductResults = ref([]);
+const selectedMovementProductRecord = ref(null);
+const movementProductSearchLoading = ref(false);
 
 const productForm = ref({
   producto_sku: '',
@@ -786,25 +881,36 @@ const productForm = ref({
   categoria_id: '',
   producto_unidad_medida: 'unidad',
   producto_alerta_stock_minimo: 5,
-  capacidad_maxima: null,
+  saldo_inicial: 0,
+  bodega_id: '',
   producto_precio_costo: 0,
   producto_ubicacion: '',
 });
 
 const movementForm = ref({
   producto_id: '',
+  bodega_id: '',
   transaccion_tipo: 'ingreso',
   transaccion_cantidad: '',
   transaccion_motivo: '',
   transaccion_referencia_id: '',
   transaccion_referencia_type: 'empleado',
 });
+let movementOperationId = null;
+let movementOperationSignature = null;
 
 const csvFile = ref(null);
-const skipDuplicates = ref(true);
 const csvCategoriaId = ref('');
+const csvBodegaId = ref('');
 const purchasesPreview = ref(null);
+const purchasesIdempotencyKey = ref('');
+const purchasesPreviewOptions = ref(null);
 const showPurchasesPreviewModal = ref(false);
+const purchasesPreviewWarehouseName = computed(() => {
+  const bodegaId = purchasesPreviewOptions.value?.bodega_id;
+  const bodega = bodegas.value.find((item) => String(item.bodega_id || item.id) === String(bodegaId));
+  return bodega?.nombre || 'Sin bodega';
+});
 
 // Toast system
 const toast = ref({ show: false, type: 'info', title: '', message: '' });
@@ -824,8 +930,28 @@ function showToast(type, title, message = '') {
 const importProgress = ref(0);
 const importStage = ref('');
 let progressInterval = null;
+let progressResetTimer = null;
+let searchDebounce = null;
+let movementSearchDebounce = null;
+let productsRequestController = null;
+let productMovementsRequestController = null;
+let movementSearchRequestController = null;
+let importRequestController = null;
+const lifecycleRequestController = new AbortController();
+let productsRequestVersion = 0;
+let productMovementsRequestVersion = 0;
+let movementSearchRequestVersion = 0;
+
+function isCanceled(error) {
+  return error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError' || error?.name === 'AbortError';
+}
 
 function startSimulatedProgress(fromPct, toPct, durationMs, stage) {
+  if (progressInterval) clearInterval(progressInterval);
+  if (progressResetTimer) {
+    clearTimeout(progressResetTimer);
+    progressResetTimer = null;
+  }
   importStage.value = stage;
   const steps = 30;
   const increment = (toPct - fromPct) / steps;
@@ -845,22 +971,34 @@ function startSimulatedProgress(fromPct, toPct, durationMs, stage) {
 function stopProgress() {
   if (progressInterval) { clearInterval(progressInterval); progressInterval = null; }
   importProgress.value = 100;
-  setTimeout(() => { importProgress.value = 0; importStage.value = ''; }, 400);
+  if (progressResetTimer) clearTimeout(progressResetTimer);
+  progressResetTimer = setTimeout(() => {
+    importProgress.value = 0;
+    importStage.value = '';
+    progressResetTimer = null;
+  }, 400);
 }
 
 onMounted(async () => {
-  await loadProducts();
-  await loadEmpleados();
+  await Promise.all([
+    loadCategories(),
+    loadBodegas(),
+    loadProducts(),
+    loadEmpleados(),
+  ]);
 
   // Auto-abrir detalle si viene de una notificación con producto_id
   const productoId = route.query.producto_id;
   if (productoId) {
     try {
-      const { data: producto } = await http.get(`/productos/${productoId}`);
+      const { data: producto } = await http.get(`/productos/${productoId}`, {
+        signal: lifecycleRequestController.signal,
+      });
       if (producto) {
         goToProduct(producto);
       }
     } catch (e) {
+      if (isCanceled(e)) return;
       console.warn('No se encontró el producto de la notificación:', e);
     }
     // Limpiar query param para evitar re-apertura
@@ -872,51 +1010,79 @@ watch(refreshTrigger, async () => {
   await loadProducts();
 });
 
-let searchDebounce = null;
 watch(search, (value) => {
   clearTimeout(searchDebounce);
   const q = value.trim();
+  if (q.length === 1) return;
   searchDebounce = setTimeout(async () => {
     currentPage.value = 1;
     await loadProducts();
   }, q.length >= 3 ? 400 : 0);
 });
 
-watch(selectedCategory, async () => {
+watch(selectedCategoryId, async () => {
   currentPage.value = 1;
   await loadProducts();
 });
 
+onUnmounted(() => {
+  clearTimeout(toastTimer);
+  clearTimeout(searchDebounce);
+  clearTimeout(movementSearchDebounce);
+  clearTimeout(progressResetTimer);
+  if (progressInterval) clearInterval(progressInterval);
+  for (const frame of activeAnimationFrames) cancelAnimationFrame(frame);
+  activeAnimationFrames.clear();
+
+  lifecycleRequestController.abort();
+  productsRequestController?.abort();
+  productMovementsRequestController?.abort();
+  movementSearchRequestController?.abort();
+  importRequestController?.abort();
+});
+
 async function loadProducts() {
+  const requestVersion = ++productsRequestVersion;
+  productsRequestController?.abort();
+  productsRequestController = new AbortController();
+  loading.value = true;
+  error.value = '';
+
   try {
-    await run(async () => {
-      const params = { page: currentPage.value, per_page: 25 };
-      const q = search.value.trim();
-      if (q.length >= 2) params.q = q;
+    const params = { page: currentPage.value, per_page: 25 };
+    const q = search.value.trim();
+    if (q.length >= 2) params.q = q;
+    if (selectedCategoryId.value !== 'all') {
+      params.categoria_id = Number(selectedCategoryId.value);
+    }
 
-      // Enviar categoría al backend
-      if (selectedCategory.value !== 'Todos') {
-        const cat = categories.value.find(c => c.nombre === selectedCategory.value);
-        if (cat) params.categoria_id = cat.categoria_id;
-      }
+    const res = await fetchInventoryProducts(params, {
+      signal: productsRequestController.signal,
+    });
+    if (requestVersion !== productsRequestVersion) return;
 
-      const res = await fetchInventoryProducts(params);
-      allProducts.value = res.data || [];
-      totalPages.value = res.meta?.last_page || 1;
-      totalItems.value = res.meta?.total || 0;
-      currentPage.value = res.meta?.current_page || 1;
-      if (res.metrics) metrics.value = res.metrics;
-    }, 'Error al cargar inventario');
-  } catch {
-    // handled by composable
+    allProducts.value = res.data || [];
+    totalPages.value = res.meta?.last_page || 1;
+    totalItems.value = res.meta?.total || 0;
+    currentPage.value = res.meta?.current_page || 1;
+    if (res.metrics) metrics.value = res.metrics;
+  } catch (requestError) {
+    if (!isCanceled(requestError) && requestVersion === productsRequestVersion) {
+      error.value = requestError?.response?.data?.message || requestError?.message || 'Error al cargar inventario';
+    }
+  } finally {
+    if (requestVersion === productsRequestVersion) loading.value = false;
   }
 }
 
 async function loadEmpleados() {
   try {
-    const { data } = await http.get('/empleados');
+    const { data } = await http.get('/empleados', {
+      signal: lifecycleRequestController.signal,
+    });
     empleados.value = extractList(data);
   } catch (err) {
+    if (isCanceled(err)) return;
     console.error('Error cargando empleados:', err);
   }
 }
@@ -932,6 +1098,26 @@ async function onSearchEnter() {
   await loadProducts();
 }
 
+async function loadCategories() {
+  try {
+    const list = await fetchCategories({ signal: lifecycleRequestController.signal });
+    categories.value = list || [];
+  } catch (err) {
+    if (isCanceled(err)) return;
+    console.error('Error cargando categorias:', err);
+  }
+}
+
+async function loadBodegas() {
+  try {
+    const list = await fetchBodegas({ signal: lifecycleRequestController.signal });
+    bodegas.value = list || [];
+  } catch (err) {
+    if (isCanceled(err)) return;
+    console.error('Error cargando bodegas:', err);
+  }
+}
+
 // Modal functions
 function openProductModal(product = null) {
   if (product) {
@@ -943,20 +1129,21 @@ function openProductModal(product = null) {
       categoria_id: product.categoria_id || product.categoria?.categoria_id || '',
       producto_unidad_medida: normalizeUnit(product) || 'unidad',
       producto_alerta_stock_minimo: normalizeAlert(product) || 5,
-      capacidad_maxima: product.capacidad_maxima || null,
       producto_precio_costo: normalizePrice(product) ? parseFloat(String(normalizePrice(product)).replace(/[^0-9.]/g, '')) : 0,
       producto_ubicacion: normalizeLocation(product) || '',
     };
   } else {
     editingProductId.value = null;
+    const defaultBodega = bodegas.value.find(b => b.tipo === 'estandar') || bodegas.value[0];
     productForm.value = {
       producto_sku: '',
       referencia_fabrica: '',
       producto_nombre: '',
-      categoria_id: '',
+      categoria_id: categories.value.length > 0 ? (categories.value[0].categoria_id || categories.value[0].id) : '',
       producto_unidad_medida: 'unidad',
       producto_alerta_stock_minimo: 5,
-      capacidad_maxima: null,
+      saldo_inicial: 0,
+      bodega_id: defaultBodega ? (defaultBodega.bodega_id || defaultBodega.id) : '',
       producto_precio_costo: 0,
       producto_ubicacion: '',
     };
@@ -1016,16 +1203,30 @@ function openMovementFromDetail() {
 
 function openMovementModal(product = null) {
   showMovementModal.value = true;
+  movementProductResults.value = product ? [product] : [];
+  selectedMovementProductRecord.value = product;
+  const defaultBodega = bodegas.value.find(b => b.tipo === 'estandar') || bodegas.value[0];
   movementForm.value = {
     producto_id: product ? product.producto_id || product.id : '',
+    bodega_id: defaultBodega ? (defaultBodega.bodega_id || defaultBodega.id) : '',
     transaccion_tipo: 'ingreso',
     transaccion_cantidad: '',
     transaccion_motivo: '',
     transaccion_referencia_id: '',
     transaccion_referencia_type: 'empleado',
   };
+  movementOperationId = null;
+  movementOperationSignature = null;
 }
 function closeMovementModal() {
+  movementSearchRequestController?.abort();
+  movementSearchRequestController = null;
+  clearTimeout(movementSearchDebounce);
+  movementProductSearchLoading.value = false;
+  movementProductResults.value = [];
+  selectedMovementProductRecord.value = null;
+  movementOperationId = null;
+  movementOperationSignature = null;
   showMovementModal.value = false;
 }
 async function submitMovement() {
@@ -1044,8 +1245,28 @@ async function submitMovement() {
       return;
     }
 
+    const movementPayload = {
+      ...movementForm.value,
+      producto_id: Number(movementForm.value.producto_id),
+      bodega_id: movementForm.value.bodega_id ? Number(movementForm.value.bodega_id) : null,
+      transaccion_cantidad: qty,
+      transaccion_referencia_id: movementForm.value.transaccion_referencia_id
+        ? Number(movementForm.value.transaccion_referencia_id)
+        : null,
+    };
+    const operationSignature = JSON.stringify(movementPayload);
+    if (!movementOperationId || movementOperationSignature !== operationSignature) {
+      movementOperationId = crypto.randomUUID();
+      movementOperationSignature = operationSignature;
+    }
+
     saving.value = true;
-    const res = await createMovement(movementForm.value);
+    const res = await createMovement({
+      ...movementPayload,
+      client_operation_id: movementOperationId,
+    });
+    movementOperationId = null;
+    movementOperationSignature = null;
     closeMovementModal();
     triggerRefresh();
     islandNotify({ type: 'success', title: 'Movimiento registrado', message: res?.message || 'Movimiento procesado correctamente.', duration: 15000 });
@@ -1062,36 +1283,72 @@ async function submitMovement() {
 
 function openCsvModal() {
   csvFile.value = null;
-  skipDuplicates.value = true;
-  const current = categories.value.find((c) => c.nombre === selectedCategory.value);
-  csvCategoriaId.value = current ? String(current.categoria_id) : '';
+  csvCategoriaId.value = selectedCategoryId.value === 'all' ? '' : String(selectedCategoryId.value);
+  const defaultBodega = bodegas.value.find((bodega) => bodega.tipo === 'estandar') || bodegas.value[0];
+  csvBodegaId.value = defaultBodega ? String(defaultBodega.bodega_id || defaultBodega.id) : '';
+  resetPurchasesPreview();
   showCsvModal.value = true;
 }
 function closeCsvModal() {
+  importRequestController?.abort();
+  importRequestController = null;
+  stopProgress();
+  saving.value = false;
+  resetPurchasesPreview();
+  csvFile.value = null;
   showCsvModal.value = false;
 }
 function onFileChange(e) {
+  resetPurchasesPreview();
   csvFile.value = e.target.files[0] || null;
+}
+function resetPurchasesPreview() {
+  purchasesPreview.value = null;
+  purchasesIdempotencyKey.value = '';
+  purchasesPreviewOptions.value = null;
+  showPurchasesPreviewModal.value = false;
+}
+function closePurchasesPreview() {
+  resetPurchasesPreview();
 }
 async function submitCsv() {
   if (!csvFile.value) return;
+  if (!csvBodegaId.value) {
+    islandNotify({
+      type: 'warning',
+      title: 'Falta bodega',
+      message: 'Seleccioná la bodega destino antes de previsualizar la importación.',
+      duration: 15000,
+    });
+    return;
+  }
   try {
+    importRequestController?.abort();
+    importRequestController = new AbortController();
     saving.value = true;
     importProgress.value = 0;
     importStage.value = 'Subiendo archivo...';
-    const res = await uploadPurchasesPreview(csvFile.value, {
+    const previewOptions = {
+      bodega_id: Number(csvBodegaId.value),
       categoria_id: csvCategoriaId.value || undefined,
-    }, (pct) => {
+    };
+    const res = await uploadPurchasesPreview(csvFile.value, previewOptions, (pct) => {
       importProgress.value = Math.round(pct * 0.5); // upload = 0-50%
       if (pct >= 100) {
         startSimulatedProgress(50, 95, 8000, 'Analizando productos...');
       }
-    });
+    }, { signal: importRequestController.signal });
+    if (!res?.idempotency_key) {
+      throw new Error('La previsualización no devolvió una clave de confirmación válida.');
+    }
     stopProgress();
     purchasesPreview.value = res;
+    purchasesIdempotencyKey.value = res.idempotency_key;
+    purchasesPreviewOptions.value = previewOptions;
     showPurchasesPreviewModal.value = true;
   } catch (err) {
     stopProgress();
+    if (isCanceled(err)) return;
     islandNotify({ type: 'error', title: 'Error al previsualizar importación', message: err.response?.data?.message || err.message, duration: 60000 });
   } finally {
     saving.value = false;
@@ -1099,19 +1356,30 @@ async function submitCsv() {
 }
 
 async function confirmPurchasesImport() {
-  if (!csvFile.value) return;
+  if (!csvFile.value || !purchasesPreviewOptions.value?.bodega_id || !purchasesIdempotencyKey.value) {
+    islandNotify({
+      type: 'error',
+      title: 'Previsualización inválida',
+      message: 'Volvé a previsualizar el archivo antes de confirmar la importación.',
+      duration: 30000,
+    });
+    return;
+  }
   try {
+    importRequestController?.abort();
+    importRequestController = new AbortController();
     saving.value = true;
     importProgress.value = 0;
     importStage.value = 'Subiendo archivo...';
     const res = await uploadPurchasesConfirm(csvFile.value, {
-      categoria_id: csvCategoriaId.value || undefined,
+      ...purchasesPreviewOptions.value,
+      idempotency_key: purchasesIdempotencyKey.value,
     }, (pct) => {
       importProgress.value = Math.round(pct * 0.4); // upload = 0-40%
       if (pct >= 100) {
         startSimulatedProgress(40, 95, 15000, 'Importando productos a la base de datos...');
       }
-    });
+    }, { signal: importRequestController.signal });
     stopProgress();
     islandNotify({ type: 'success', title: 'Importación aplicada', message: `${res.created_products} productos nuevos, ${res.updated_products} actualizados, ${res.movements_created} movimientos.`, duration: 30000 });
     showPurchasesPreviewModal.value = false;
@@ -1119,75 +1387,120 @@ async function confirmPurchasesImport() {
     triggerRefresh();
   } catch (err) {
     stopProgress();
+    if (isCanceled(err)) return;
     showToast('error', 'Error al aplicar importación', err.response?.data?.message || err.message);
   } finally {
     saving.value = false;
-    purchasesPreview.value = null;
-    csvFile.value = null;
   }
 }
 
-const productOptionsForMovement = computed(() => {
-  return filteredProducts.value.map((prod) => {
-    const sku = normalizeSku(prod);
-    const name = normalizeName(prod);
-    const ref = normalizeRef(prod);
-    const stock = normalizeStock(prod);
-    const value = String(normalizeId(prod));
-
-    return {
-      value,
-      label: `${sku} - ${name}`,
-      description: ref ? `Ref: ${ref} · Stock: ${stock}` : `Stock: ${stock}`,
-      keywords: `${sku} ${name} ${ref || ''}`.trim(),
-    };
-  });
-});
-
-const empleadoOptionsForMovement = computed(() => {
-  return empleados.value.map((emp) => {
-    const nombres = String(emp.nombres || '').trim();
-    const apellidos = String(emp.apellidos || '').trim();
-    const cargo = String(emp.cargo || 'Sin cargo').trim();
-    const label = `${nombres} ${apellidos}`.trim() || 'Sin nombre';
-    const value = String(emp.id);
-
-    return {
-      value,
-      label,
-      description: cargo,
-      keywords: `${label} ${cargo}`.trim(),
-    };
-  });
-});
-
 const filteredProducts = computed(() => allProducts.value);
+
+const movementProductOptions = computed(() => {
+  const products = movementProductResults.value.length > 0
+    ? movementProductResults.value
+    : allProducts.value;
+  const selectedId = String(movementForm.value.producto_id || '');
+  const selected = selectedMovementProductRecord.value
+    && String(normalizeId(selectedMovementProductRecord.value)) === selectedId
+    ? selectedMovementProductRecord.value
+    : null;
+
+  if (!selected || products.some((product) => String(normalizeId(product)) === selectedId)) {
+    return products;
+  }
+
+  return [selected, ...products];
+});
 
 const selectedMovementProduct = computed(() => {
   if (!movementForm.value.producto_id) return null;
-  return allProducts.value.find(
+  return movementProductOptions.value.find(
     (p) => String(p.producto_id || p.id) === String(movementForm.value.producto_id),
   );
 });
 
+function onMovementProductSelect(product) {
+  selectedMovementProductRecord.value = product;
+}
+
+function onMovementProductSearch(value) {
+  const requestVersion = ++movementSearchRequestVersion;
+  clearTimeout(movementSearchDebounce);
+  movementSearchRequestController?.abort();
+  movementProductSearchLoading.value = false;
+
+  const query = value.trim();
+  if (query.length < 2) {
+    movementProductResults.value = [];
+    return;
+  }
+
+  movementSearchDebounce = setTimeout(async () => {
+    movementSearchRequestController = new AbortController();
+    movementProductSearchLoading.value = true;
+    try {
+      const results = await searchInventoryProducts(query, {
+        signal: movementSearchRequestController.signal,
+      });
+      if (requestVersion === movementSearchRequestVersion) movementProductResults.value = results;
+    } catch (requestError) {
+      if (!isCanceled(requestError)) {
+        movementProductResults.value = [];
+        islandNotify({
+          type: 'error',
+          title: 'No se pudo buscar productos',
+          message: requestError?.response?.data?.message || requestError?.message,
+          duration: 30000,
+        });
+      }
+    } finally {
+      if (requestVersion === movementSearchRequestVersion) movementProductSearchLoading.value = false;
+    }
+  }, 300);
+}
+
 async function goToProduct(product) {
+  const requestVersion = ++productMovementsRequestVersion;
+  productMovementsRequestController?.abort();
+  productMovementsRequestController = new AbortController();
   selectedProduct.value = product;
   showDetailModal.value = true;
   productMovements.value = [];
+  productMovementsTotal.value = 0;
+  productMovementsError.value = '';
+  productMovementsLoading.value = true;
   showAllMovements.value = false;
   try {
     const id = normalizeId(product);
-    const { data } = await http.get('/movimientos', { params: { producto_id: id } });
-    productMovements.value = extractList(data);
-  } catch {
-    productMovements.value = [];
+    const response = await fetchInventoryMovements(
+      { producto_id: id, page: 1, per_page: 50 },
+      { signal: productMovementsRequestController.signal },
+    );
+    if (requestVersion !== productMovementsRequestVersion) return;
+    productMovements.value = response.data;
+    productMovementsTotal.value = response.meta?.total ?? response.data.length;
+  } catch (requestError) {
+    if (!isCanceled(requestError) && requestVersion === productMovementsRequestVersion) {
+      productMovementsError.value = requestError?.response?.status === 403
+        ? 'No tenés permiso para consultar el historial de movimientos.'
+        : requestError?.response?.data?.message || requestError?.message || 'No se pudo cargar el historial de movimientos.';
+    }
+  } finally {
+    if (requestVersion === productMovementsRequestVersion) productMovementsLoading.value = false;
   }
 }
 
 function closeDetailModal() {
+  productMovementsRequestVersion += 1;
+  productMovementsRequestController?.abort();
+  productMovementsRequestController = null;
   showDetailModal.value = false;
   selectedProduct.value = null;
   productMovements.value = [];
+  productMovementsTotal.value = 0;
+  productMovementsError.value = '';
+  productMovementsLoading.value = false;
   showAllMovements.value = false;
 }
 
@@ -2394,6 +2707,87 @@ function formatMovDate(dateStr) {
   }
 }
 
+/* Category Filter Dropdown & Badge */
+.category-filter-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+  max-width: 280px;
+  flex: 1;
+}
+
+.category-filter-select :deep(.searchable-dropdown) {
+  width: 100%;
+}
+
+.category-filter-select :deep(.dropdown-trigger) {
+  height: 38px;
+  padding-left: 36px;
+  padding-right: 12px;
+  background: var(--surface, #1e1e1e);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  border-radius: var(--radius-sm, 8px);
+  font-size: 0.85rem;
+  color: var(--text-main, #ffffff);
+  transition: all 0.2s ease;
+}
+
+.category-filter-select :deep(.dropdown-trigger:hover) {
+  border-color: var(--primary, #ffd600);
+}
+
+.category-filter-select :deep(.dropdown-trigger.dropdown-open) {
+  border-color: var(--primary, #ffd600);
+  box-shadow: 0 0 0 2px rgba(255, 214, 0, 0.15);
+}
+
+.filter-icon-prefix {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  color: var(--primary, #ffd600);
+}
+
+.filter-icon-prefix .material-icons-round {
+  font-size: 18px;
+}
+
+.active-filter-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 214, 0, 0.12);
+  border: 1px solid rgba(255, 214, 0, 0.3);
+  color: var(--primary, #ffd600);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.active-filter-badge:hover {
+  background: rgba(255, 214, 0, 0.22);
+  transform: translateY(-1px);
+}
+
+.active-filter-badge .badge-clear {
+  font-size: 14px;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
+.active-filter-badge:hover .badge-clear {
+  opacity: 1;
+}
+
 @media (max-width: 480px) {
   .metrics-row {
     grid-template-columns: 1fr;
@@ -2403,9 +2797,9 @@ function formatMovDate(dateStr) {
     grid-template-columns: 1fr;
   }
 
-  .filter-chips {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .category-filter-select {
+    min-width: 100%;
+    max-width: 100%;
   }
 }
 </style>

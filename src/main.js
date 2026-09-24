@@ -28,7 +28,7 @@ authStore.hydrateFromStorage();
 window.addEventListener(AUTH_UNAUTHORIZED_EVENT, () => {
   authStore.clearSession();
 
-  if (router.currentRoute.value.path !== '/login' && !router.currentRoute.value.path.includes('/diagnostic')) {
+  if (router.currentRoute.value.path !== '/login') {
     router.replace('/login');
   }
 });

@@ -1,0 +1,142 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import { buildAlertQuery, contarNoLeidas, mergeUniqueAlerts } from '../src/features/inventory-orders/utils/alerts.js';
+import { createAlertsStore } from '../src/features/inventory-orders/utils/alertsStore.js';
+
+const alerta = (id, extra = {}) => ({
+  alerta_id: id,
+  tipo: 'pedido_publicado',
+  leida: false,
+  pedido: { uuid: `pedido-${id}`, numero: `PED-${id}`, estado: 'pendiente_recepcion' },
+  ...extra,
+});
+
+test('deduplica alertas por id conservando el orden de llegada', () => {
+  const mezcla = mergeUniqueAlerts(
+    [alerta(1), alerta(2)],
+    [alerta(2), alerta(3), alerta(1)],
+  );
+
+  assert.deepEqual(mezcla.map((item) => item.alerta_id), [1, 2, 3]);
+  assert.equal(contarNoLeidas(mezcla), 3);
+  assert.equal(contarNoLeidas([alerta(1, { leida: true }), alerta(2)]), 1);
+});
+
+test('construye la query de la bandeja sin parámetros vacíos', () => {
+  assert.deepEqual(buildAlertQuery({}), { page: 1, per_page: 25 });
+  assert.deepEqual(buildAlertQuery({ tipo: 'novedad_abierta', leida: false, page: 2, perPage: 10 }), {
+    page: 2,
+    per_page: 10,
+    tipo: 'novedad_abierta',
+    leida: 0,
+  });
+});
+
+test('la bandeja usa meta.unread_count del servidor y marca leídas sin inventar', async () => {
+  const marcas = [];
+  const store = createAlertsStore({
+    api: {
+      listAlerts: async () => ({
+        data: [alerta(10), alerta(11, { leida: true })],
+        meta: { current_page: 1, last_page: 1, per_page: 25, total: 2, unread_count: 5 },
+      }),
+      readAlert: async (id) => {
+        marcas.push(id);
+        return { alerta_id: id, leida: true, leida_at: '2026-09-10T12:00:00Z' };
+      },
+    },
+    now: () => '2026-09-10T12:00:00Z',
+  });
+
+  await store.refresh();
+
+  assert.equal(store.state.unreadCount, 5);
+  assert.equal(store.state.loaded, true);
+  assert.equal(store.state.items.length, 2);
+
+  await store.markRead(10);
+
+  assert.deepEqual(marcas, [10]);
+  assert.equal(store.state.items[0].leida, true);
+  assert.equal(store.state.unreadCount, 0);
+
+  store.mergeIncoming([alerta(10, { leida: true }), alerta(12)]);
+
+  assert.equal(store.state.items.length, 3);
+  assert.equal(store.state.unreadCount, 1);
+});
+
+test('un fallo del contador no rompe la bandeja', async () => {
+  const store = createAlertsStore({
+    api: {
+      listAlerts: async () => { throw new Error('offline'); },
+      readAlert: async () => ({}),
+    },
+  });
+
+  await store.refreshUnreadCount();
+
+  assert.equal(store.state.unreadCount, 0);
+  assert.equal(store.state.items.length, 0);
+});
+
+test('FIX-4: markRead conserva el unread_count del servidor cuando viene presente', async () => {
+  const store = createAlertsStore({
+    api: {
+      listAlerts: async () => ({
+        data: [alerta(20), alerta(21), alerta(22)],
+        meta: { current_page: 1, last_page: 2, per_page: 3, total: 6, unread_count: 6 },
+      }),
+      // Servidor con total global (paginado): el conteo visible (2) no manda.
+      readAlert: async () => ({ alerta_id: 20, leida: true, meta: { unread_count: 5 } }),
+    },
+  });
+
+  await store.refresh();
+  assert.equal(store.state.unreadCount, 6);
+
+  await store.markRead(20);
+  assert.equal(store.state.items[0].leida, true);
+  assert.equal(store.state.unreadCount, 5);
+});
+
+test('FIX-4: clearInbox/reset vacía el singleton compartido (logout)', async () => {
+  const store = createAlertsStore({
+    api: {
+      listAlerts: async () => ({
+        data: [alerta(30)],
+        meta: { current_page: 1, last_page: 1, per_page: 25, total: 1, unread_count: 1 },
+      }),
+      readAlert: async () => ({}),
+    },
+  });
+
+  await store.refresh();
+  assert.equal(store.state.items.length, 1);
+  assert.equal(store.state.loaded, true);
+
+  store.clearInbox();
+
+  assert.deepEqual(store.state.items, []);
+  assert.equal(store.state.meta, null);
+  assert.equal(store.state.unreadCount, 0);
+  assert.equal(store.state.loaded, false);
+  assert.equal(store.state.loading, false);
+  assert.equal(store.state.error, null);
+  assert.equal(store.reset, store.clearInbox);
+});
+
+test('FIX-4: mergeIncoming acepta matchesFilter para respetar filtros activos', () => {
+  const store = createAlertsStore({
+    api: { listAlerts: async () => ({ data: [], meta: {} }), readAlert: async () => ({}) },
+  });
+
+  store.mergeIncoming(
+    [alerta(40, { tipo: 'novedad_abierta' }), alerta(41, { tipo: 'pedido_publicado' })],
+    { matchesFilter: (item) => item.tipo === 'novedad_abierta' },
+  );
+
+  assert.deepEqual(store.state.items.map((item) => item.alerta_id), [40]);
+  assert.equal(store.state.unreadCount, 1);
+});

@@ -1,13 +1,14 @@
 import axios from 'axios';
 
+import { API_BASE_URL } from '../config/runtime';
+
 import {
   AUTH_UNAUTHORIZED_EVENT,
   clearStoredSession,
   getStoredToken,
 } from '../auth/session';
 
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+export { API_BASE_URL };
 
 const http = axios.create({
   baseURL: API_BASE_URL,
@@ -23,6 +24,9 @@ http.interceptors.request.use((config) => {
   const token = getStoredToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
   }
   return config;
 });

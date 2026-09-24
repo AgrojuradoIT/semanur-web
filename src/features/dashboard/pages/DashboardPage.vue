@@ -19,62 +19,67 @@
         </div>
       </header>
 
-      <!-- ── 1. TANQUES DE COMBUSTIBLE ── -->
+      <!-- ── 1. TANQUES DE COMBUSTIBLE (FORMA DE CISTERNA INDUSTRIAL) ── -->
       <section v-if="fuelStock.length" class="dash-fuel-hero">
         <article
           v-for="fuel in fuelStock"
           :key="fuel.producto_id"
           class="fuel-tank-card"
-          :class="`fuel-tank-${getFuelLevelStatus(fuel)}`"
+          :class="[`fuel-tank-${getFuelLevelStatus(fuel)}`, `fuel-type-${isAcpm(fuel) ? 'acpm' : 'gasolina'}`]"
+          @click="$router.push({ path: '/fuel', query: { tipo_combustible: isAcpm(fuel) ? 'acpm' : 'gasolina' } })"
         >
-          <!-- Background icon -->
-          <span class="fuel-tank-bg-icon material-icons-round">{{ fuelIcon(fuel.producto_nombre) }}</span>
+          <!-- Tank Card Header -->
+          <div class="tank-card-header">
+            <div class="tank-card-title-group">
+              <span class="fuel-dot" :class="`fuel-dot-${getFuelLevelStatus(fuel)}`"></span>
+              <h3 class="tank-card-title">Stock de {{ isAcpm(fuel) ? 'ACPM' : 'Combustible' }}</h3>
+            </div>
+            <div class="tank-card-status-badge" :class="`status-${getFuelLevelStatus(fuel)}`">
+              {{ getFuelLevelText(fuel) }}
+            </div>
+          </div>
 
-          <div class="fuel-tank-body">
-            <!-- Top -->
-            <div class="fuel-tank-top">
-              <div class="fuel-tank-indicator">
-                <span
-                  class="fuel-dot"
-                  :class="`fuel-dot-${getFuelLevelStatus(fuel)}`"
-                ></span>
-                <span class="fuel-tank-label">
-                  {{ getFuelLevelText(fuel) }}
-                </span>
+          <!-- Tank Visual Graphic (Horizontal Cylinder) -->
+          <div class="tank-visual-container">
+            <!-- Top Inlet Hatch -->
+            <div class="tank-hatch-cap"></div>
+
+            <!-- Tank Cylinder Body -->
+            <div class="tank-cylinder-body">
+              <!-- Top Glare Highlight -->
+              <div class="tank-glare-reflection"></div>
+
+              <!-- Liquid Level Fill (Bottom to Top with Wave Dynamics) -->
+              <div
+                class="tank-liquid-chamber"
+                :class="`liquid-${isAcpm(fuel) ? 'acpm' : 'gasolina'}`"
+                :style="{ height: fuelBarPercent(fuel) + '%' }"
+              >
+                <!-- Animated Waves on Liquid Surface -->
+                <div class="tank-wave wave-back"></div>
+                <div class="tank-wave wave-front"></div>
+                <!-- Meniscus Surface Highlight -->
+                <div class="tank-liquid-meniscus"></div>
               </div>
-              <span class="fuel-tank-sku">{{ fuel.producto_sku }}</span>
             </div>
 
-            <!-- Name & Value -->
-            <p class="fuel-tank-name">{{ fuel.producto_nombre }}</p>
-            <div class="fuel-tank-row">
-              <div class="fuel-tank-main">
-                <span
-                  class="fuel-tank-value"
-                  :class="`value-${getFuelLevelStatus(fuel)}`"
-                >
-                  {{ formatNumber(fuel.producto_stock_actual) }}
-                  <span class="fuel-tank-unit">{{ fuel.producto_unidad_medida || 'GAL' }}</span>
-                </span>
-                <span class="fuel-pct-label" :class="`pct-${getFuelLevelStatus(fuel)}`">
-                  {{ fuelBarPercent(fuel).toFixed(0) }}% Capacidad
-                </span>
-                <!-- Progress bar -->
-                <div class="fuel-bar-track">
-                  <div
-                    class="fuel-bar-fill"
-                    :class="`bar-${getFuelLevelStatus(fuel)}`"
-                    :style="{ width: fuelBarPercent(fuel) + '%' }"
-                  ></div>
-                </div>
-              </div>
+            <!-- Bottom Support Legs -->
+            <div class="tank-support-legs">
+              <span class="tank-leg leg-left"></span>
+              <span class="tank-leg leg-right"></span>
+            </div>
+          </div>
 
-              <!-- Right: Capacity info -->
-              <div class="fuel-tank-right" v-if="fuel.capacidad_maxima">
-                <p class="fuel-cap-label">CAPACIDAD TOTAL</p>
-                <p class="fuel-cap-value">{{ formatNumber(fuel.capacidad_maxima) }}</p>
-                <p class="fuel-cap-unit">{{ fuel.producto_unidad_medida || 'GAL' }}</p>
-              </div>
+          <!-- Tank Footer Info -->
+          <div class="tank-footer-row">
+            <div class="tank-type-label">
+              {{ fuel.producto_nombre }}
+            </div>
+            <div class="tank-stock-value">
+              <span class="tank-qty">{{ formatNumber(fuel.producto_stock_actual) }} {{ fuel.producto_unidad_medida || 'GAL' }}</span>
+              <span class="tank-pct" :class="`pct-val-${getFuelLevelStatus(fuel)}`">
+                ({{ fuelBarPercent(fuel).toFixed(0) }}%)
+              </span>
             </div>
           </div>
         </article>
@@ -531,8 +536,6 @@ function fuelBarPercent(fuel) {
 function getFuelLevelStatus(fuel) {
   const stock = Number(fuel.producto_stock_actual || 0);
   const min = Number(fuel.producto_alerta_stock_minimo || 0);
-
-  // Critical is 50% of the minimum alert threshold (e.g., if min is 800, critical is 400)
   const criticalThreshold = min / 2;
 
   if (stock <= criticalThreshold) return 'danger';
@@ -545,6 +548,12 @@ function getFuelLevelText(fuel) {
   if (status === 'danger') return 'Nivel Crítico';
   if (status === 'warning') return 'Nivel Bajo';
   return 'Nivel Óptimo';
+}
+
+function isAcpm(fuel) {
+  const name = (fuel.producto_nombre || fuel.nombre || '').toLowerCase();
+  const sku = (fuel.producto_sku || '').toLowerCase();
+  return name.includes('acpm') || name.includes('diesel') || sku.includes('acpm') || sku.includes('dsl');
 }
 </script>
 
@@ -592,93 +601,52 @@ function getFuelLevelText(fuel) {
   flex-wrap: wrap;
 }
 
-.dash-title {
-  font-family: 'Oswald', sans-serif;
-  font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-main);
-  text-transform: uppercase;
-}
-
-.dash-header-divider {
-  width: 1px;
-  height: 24px;
-  background: var(--surface-2);
-}
-
 .dash-subtitle {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
   color: var(--text-gray);
   font-weight: 500;
   text-transform: capitalize;
 }
 
-/* ═══ TANQUES DE COMBUSTIBLE ═══ */
+/* ═══ TANQUES DE COMBUSTIBLE (FORMA INDUSTRIAL CISTERNA) ═══ */
 .dash-fuel-hero {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 20px;
+  width: 100%;
 }
 
 .fuel-tank-card {
   background: var(--surface);
   border: 1px solid var(--surface-2);
-  border-radius: 20px;
-  padding: 32px;
+  border-radius: var(--radius-lg);
+  padding: 22px 24px 18px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  cursor: pointer;
+  transition: transform var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
   position: relative;
   overflow: hidden;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
 .fuel-tank-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+  transform: translateY(-2px);
+  border-color: rgba(255, 214, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-.fuel-tank-danger {
-  border-color: rgba(239, 68, 68, 0.4);
-}
-
-.fuel-tank-warning {
-  border-color: rgba(245, 158, 11, 0.4);
-}
-
-/* Big ghost icon */
-.fuel-tank-bg-icon {
-  position: absolute;
-  top: 12px;
-  right: 20px;
-  font-size: 120px;
-  opacity: 0.07;
-  color: var(--text-main);
-  pointer-events: none;
-  transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.fuel-tank-card:hover .fuel-tank-bg-icon {
-  opacity: 0.12;
-  transform: scale(1.08);
-}
-
-.fuel-tank-body {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.fuel-tank-top {
+.tank-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
-.fuel-tank-indicator {
+.tank-card-title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
 
 .fuel-dot {
@@ -709,130 +677,244 @@ function getFuelLevelText(fuel) {
   50% { opacity: 0.5; transform: scale(0.8); }
 }
 
-.fuel-tank-label {
-  font-size: 0.75rem;
+.tank-card-title {
+  font-size: 1.15rem;
   font-weight: 700;
-  color: var(--text-gray);
-  text-transform: uppercase;
-  letter-spacing: 1px;
+  color: var(--text-main);
+  margin: 0;
+  letter-spacing: 0.2px;
 }
 
-.fuel-tank-sku {
+.tank-card-status-badge {
   font-size: 0.72rem;
-  color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 20px;
+  text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.fuel-tank-name {
-  font-family: 'Oswald', sans-serif;
-  font-size: 2.2rem;
-  font-weight: 700;
-  color: var(--text-main);
-  text-transform: uppercase;
-  line-height: 1;
+.status-ok {
+  background: var(--success-10);
+  color: var(--success);
 }
 
-.fuel-tank-row {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
+.status-warning {
+  background: var(--warning-10);
+  color: #f59e0b;
 }
 
-.fuel-tank-main {
-  flex: 1;
+.status-danger {
+  background: var(--danger-10);
+  color: #ef4444;
+}
+
+/* ── TANK VISUAL CONTAINER ── */
+.tank-visual-container {
+  position: relative;
+  width: 100%;
+  padding: 6px 4px 4px 4px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+}
+
+.tank-hatch-cap {
+  width: 40px;
+  height: 8px;
+  background: var(--tank-metal-part);
+  border: 2px solid var(--tank-metal-border);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  margin-bottom: -1px;
+  margin-left: -55%;
+  z-index: 2;
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.tank-cylinder-body {
+  position: relative;
+  width: 100%;
+  height: 94px;
+  background: var(--tank-body-bg);
+  border: var(--tank-body-border);
+  border-radius: 47px;
+  overflow: hidden;
+  box-shadow: var(--tank-body-shadow);
+  transition: background var(--transition-base), border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+.tank-glare-reflection {
+  position: absolute;
+  top: 3px;
+  left: 24px;
+  right: 24px;
+  height: 14px;
+  background: var(--tank-glare);
+  border-radius: 7px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.tank-liquid-chamber {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  transition: height 1.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  overflow: visible;
+}
+
+/* ── REALISTIC DUAL WAVE SURFACE ── */
+.tank-wave {
+  position: absolute;
+  top: -10px;
+  left: 0;
+  width: 200%;
+  height: 14px;
+  background-repeat: repeat-x;
+  background-size: 50% 100%;
+  pointer-events: none;
+}
+
+.wave-front {
+  z-index: 3;
+  animation: waveMotionFront 4s linear infinite;
+  opacity: 0.95;
+}
+
+.wave-back {
+  top: -12px;
+  z-index: 2;
+  animation: waveMotionBack 6.5s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes waveMotionFront {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes waveMotionBack {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+/* ── LIQUID THEMES & WAVES ── */
+/* ACPM (Emerald / Cyan Fluid Dynamics) */
+.liquid-acpm {
+  background: linear-gradient(180deg, #10b981 0%, #059669 30%, #044e37 70%, #02291d 100%);
+  box-shadow: 0 -4px 18px rgba(16, 185, 129, 0.5), inset 0 2px 8px rgba(255, 255, 255, 0.25);
+}
+
+.liquid-acpm .wave-front {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 30' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C150,28 350,2 600,15 C850,28 1050,2 1200,15 L1200,30 L0,30 Z' fill='%2310b981'/%3E%3C/svg%3E");
+}
+
+.liquid-acpm .wave-back {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 30' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C200,2 400,28 600,15 C800,2 1000,28 1200,15 L1200,30 L0,30 Z' fill='%23059669'/%3E%3C/svg%3E");
+}
+
+/* Gasolina (Amber / Golden Orange Fluid Dynamics) */
+.liquid-gasolina {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 30%, #92400e 70%, #451a03 100%);
+  box-shadow: 0 -4px 18px rgba(245, 158, 11, 0.5), inset 0 2px 8px rgba(255, 255, 255, 0.25);
+}
+
+.liquid-gasolina .wave-front {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 30' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C150,28 350,2 600,15 C850,28 1050,2 1200,15 L1200,30 L0,30 Z' fill='%23f59e0b'/%3E%3C/svg%3E");
+}
+
+.liquid-gasolina .wave-back {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 30' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C200,2 400,28 600,15 C800,2 1000,28 1200,15 L1200,30 L0,30 Z' fill='%23d97706'/%3E%3C/svg%3E");
+}
+
+/* Danger / Critical level */
+.fuel-tank-danger .tank-liquid-chamber {
+  background: linear-gradient(180deg, #ef4444 0%, #dc2626 30%, #991b1b 70%, #450a0a 100%) !important;
+  box-shadow: 0 -4px 20px rgba(239, 68, 68, 0.6), inset 0 2px 8px rgba(255, 255, 255, 0.25) !important;
+}
+
+.fuel-tank-danger .wave-front {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 30' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C150,28 350,2 600,15 C850,28 1050,2 1200,15 L1200,30 L0,30 Z' fill='%23ef4444'/%3E%3C/svg%3E") !important;
+}
+
+.fuel-tank-danger .wave-back {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1200 30' preserveAspectRatio='none'%3E%3Cpath d='M0,15 C200,2 400,28 600,15 C800,2 1000,28 1200,15 L1200,30 L0,30 Z' fill='%23dc2626'/%3E%3C/svg%3E") !important;
+}
+
+.tank-liquid-meniscus {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 4px #ffffff;
+  z-index: 4;
+}
+
+.tank-support-legs {
+  display: flex;
+  justify-content: space-between;
+  width: 65%;
+  margin-top: -1px;
+  z-index: 1;
+}
+
+.tank-leg {
+  width: 22px;
+  height: 8px;
+  background: var(--tank-metal-part);
+  border: 2px solid var(--tank-metal-border);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+}
+
+/* ── FOOTER ROW ── */
+.tank-footer-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.tank-type-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.tank-stock-value {
+  display: flex;
+  align-items: baseline;
   gap: 8px;
 }
 
-.fuel-tank-value {
+.tank-qty {
   font-family: 'Oswald', sans-serif;
-  font-size: 3.5rem;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.fuel-tank-unit {
-  font-size: 1rem;
-  font-weight: 400;
-  color: var(--text-gray);
-  margin-left: 6px;
-}
-
-.value-ok { color: var(--primary); }
-.value-warning { color: #f59e0b; }
-.value-danger { color: #ef4444; }
-
-.fuel-pct-label {
-  font-size: 0.78rem;
-  color: var(--text-gray);
-  font-weight: 600;
-}
-
-.pct-ok { color: var(--text-gray); }
-.pct-warning { color: #f59e0b; font-weight: 700; }
-.pct-danger { color: #f97316; font-weight: 700; }
-
-.fuel-bar-track {
-  height: 14px;
-  background: var(--surface-2);
-  border-radius: 7px;
-  overflow: hidden;
-}
-
-.fuel-bar-fill {
-  height: 100%;
-  border-radius: 7px;
-  transition: width 1.2s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.bar-ok {
-  background: linear-gradient(90deg, var(--primary), var(--success));
-  box-shadow: 0 0 16px rgba(242, 242, 13, 0.3);
-}
-
-.bar-warning {
-  background: linear-gradient(90deg, #fde047, #f59e0b);
-  box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
-}
-
-.bar-danger {
-  background: linear-gradient(90deg, #f97316, #ef4444);
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.3);
-}
-
-.fuel-tank-right {
-  text-align: right;
-  border-left: 1px solid var(--surface-2);
-  padding-left: 20px;
-  flex-shrink: 0;
-}
-
-.fuel-cap-label {
-  font-size: 0.65rem;
+  font-size: 1.85rem;
   font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-  margin-bottom: 4px;
-}
-
-.fuel-cap-value {
-  font-family: 'Oswald', sans-serif;
-  font-size: 2.2rem;
-  font-weight: 700;
   color: var(--text-main);
+  letter-spacing: 0.5px;
   line-height: 1;
 }
 
-.fuel-cap-unit {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  font-weight: 600;
-  margin-top: 2px;
+.tank-pct {
+  font-family: 'Oswald', sans-serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1;
 }
+
+.pct-val-ok { color: var(--text-main); }
+.pct-val-warning { color: #f59e0b; }
+.pct-val-danger { color: #ef4444; }
 
 /* ═══ KPI GRID ═══ */
 .dash-kpi-grid {
@@ -951,31 +1033,6 @@ function getFuelLevelText(fuel) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
-}
-
-.dash-panel {
-  background: var(--surface);
-  border: 1px solid var(--surface-2);
-  border-radius: 16px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.dash-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--surface-2);
-}
-
-.dash-panel-head h3 {
-  font-family: 'Oswald', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
   color: var(--text-main);
 }
 
@@ -1318,5 +1375,62 @@ function getFuelLevelText(fuel) {
 }
 .fade-enter-from, .fade-leave-to {
   opacity: 0;
+}
+
+/* ═══ MODO CLARO (LIGHT MODE ADAPTATIONS) ═══ */
+:global(.light-mode) .fuel-tank-card {
+  background: var(--surface);
+  border-color: var(--surface-2);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+}
+
+:global(.light-mode) .fuel-tank-card:hover {
+  border-color: rgba(255, 214, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+:global(.light-mode) .tank-hatch-cap {
+  background: #cbd5e1;
+  border-color: #94a3b8;
+  box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.06);
+}
+
+:global(.light-mode) .tank-cylinder-body {
+  background: radial-gradient(ellipse at 50% 25%, #f8fafc 0%, #e2e8f0 100%);
+  border-color: #cbd5e1;
+  box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.08), inset 0 -4px 10px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+:global(.light-mode) .tank-glare-reflection {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.4) 50%, rgba(255, 255, 255, 0) 100%);
+}
+
+:global(.light-mode) .tank-leg {
+  background: #cbd5e1;
+  border-color: #94a3b8;
+}
+
+:global(.light-mode) .liquid-acpm {
+  background: linear-gradient(180deg, #10b981 0%, #059669 35%, #047857 75%, #065f46 100%);
+  box-shadow: 0 -4px 16px rgba(16, 185, 129, 0.4), inset 0 2px 8px rgba(255, 255, 255, 0.35);
+}
+
+:global(.light-mode) .liquid-gasolina {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 35%, #b45309 75%, #92400e 100%);
+  box-shadow: 0 -4px 16px rgba(245, 158, 11, 0.4), inset 0 2px 8px rgba(255, 255, 255, 0.35);
+}
+
+:global(.light-mode) .fuel-history-panel {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+:global(.light-mode) .chart-tooltip {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+:global(.light-mode) .tooltip-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 </style>

@@ -1,22 +1,38 @@
 import { createRouter, createWebHashHistory } from 'vue-router';
 
 import AppShell from '../layouts/AppShell.vue';
-import LoginPage from '../../features/auth/pages/LoginPage.vue';
-import DiagnosticPage from '../../pages/DiagnosticPage.vue';
-import DashboardPage from '../../features/dashboard/pages/DashboardPage.vue';
-import InventoryPage from '../../features/inventory/pages/InventoryPage.vue';
-import FleetPage from '../../features/fleet/pages/FleetPage.vue';
-import WorkOrdersPage from '../../features/work-orders/pages/WorkOrdersPage.vue';
-import AuditWorkOrders from '../../features/work-orders/pages/AuditWorkOrders.vue';
-import EmployeesPage from '../../features/employees/pages/EmployeesPage.vue';
-import HistoryPage from '../../features/history/pages/HistoryPage.vue';
-import LoansPage from '../../features/loans/pages/LoansPage.vue';
-import FuelPage from '../../features/fuel/pages/FuelPage.vue';
-import FuelReportsPage from '../../features/fuel/pages/FuelReportsPage.vue';
-import PreoperacionalesPage from '../../features/preoperacionales/pages/PreoperacionalesPage.vue';
-import SchedulerPage from '../../features/scheduler/pages/SchedulerPage.vue';
-import NotificationsPage from '../../features/notifications/pages/NotificationsPage.vue';
 import { useAuthStore } from '../../shared/stores/auth';
+import { isInventoryOrdersFeatureEnabled } from '../../features/inventory-orders/utils/flag';
+
+// Route-level code splitting: each page lands in its own chunk and is
+// fetched on first navigation, keeping the entry bundle small.
+const LoginPage = () => import('../../features/auth/pages/LoginPage.vue');
+const DashboardPage = () => import('../../features/dashboard/pages/DashboardPage.vue');
+const InventoryPage = () => import('../../features/inventory/pages/InventoryPage.vue');
+const FleetPage = () => import('../../features/fleet/pages/FleetPage.vue');
+const WorkOrdersPage = () => import('../../features/work-orders/pages/WorkOrdersPage.vue');
+const AuditWorkOrders = () => import('../../features/work-orders/pages/AuditWorkOrders.vue');
+const EmployeesPage = () => import('../../features/employees/pages/EmployeesPage.vue');
+const HistoryPage = () => import('../../features/history/pages/HistoryPage.vue');
+const LoansPage = () => import('../../features/loans/pages/LoansPage.vue');
+const FuelPage = () => import('../../features/fuel/pages/FuelPage.vue');
+const FuelReportsPage = () => import('../../features/fuel/pages/FuelReportsPage.vue');
+const PreoperacionalesPage = () => import('../../features/preoperacionales/pages/PreoperacionalesPage.vue');
+const SchedulerPage = () => import('../../features/scheduler/pages/SchedulerPage.vue');
+const NotificationsPage = () => import('../../features/notifications/pages/NotificationsPage.vue');
+// U8: pedidos de inventario (feature flag + permiso exactos). Lazy por ruta.
+const InventoryOrdersPage = () => import('../../features/inventory-orders/pages/PedidosPage.vue');
+const InventoryOrdersNewPage = () => import('../../features/inventory-orders/pages/NuevoPedidoPage.vue');
+const InventoryOrdersReceptionPage = () => import('../../features/inventory-orders/pages/RecepcionPage.vue');
+const InventoryOrdersIssuesPage = () => import('../../features/inventory-orders/pages/NovedadesPage.vue');
+const InventoryOrdersHistoryPage = () => import('../../features/inventory-orders/pages/HistorialPage.vue');
+const InventoryOrdersAlertsPage = () => import('../../features/inventory-orders/pages/AlertasPage.vue');
+
+const inventoryOrdersMeta = {
+  requiresAuth: true,
+  modulo: 'inventario',
+  feature: 'inventoryOrders',
+};
 
 const shellChildren = [
   { path: '', name: 'dashboard', component: DashboardPage, meta: { title: 'Dashboard', requiresAuth: true, modulo: 'analitica' } },
@@ -92,6 +108,48 @@ const shellChildren = [
     component: NotificationsPage,
     meta: { title: 'Centro de Notificaciones', requiresAuth: true },
   },
+  {
+    path: 'inventory-orders',
+    name: 'inventory-orders',
+    component: InventoryOrdersPage,
+    meta: { ...inventoryOrdersMeta, title: 'Pedidos', permission: 'pedidos.read' },
+  },
+  {
+    path: 'inventory-orders/nuevo',
+    name: 'inventory-orders-new',
+    component: InventoryOrdersNewPage,
+    meta: { ...inventoryOrdersMeta, title: 'Nuevo pedido', permission: 'pedidos.create' },
+  },
+  {
+    path: 'inventory-orders/alertas',
+    name: 'inventory-orders-alerts',
+    component: InventoryOrdersAlertsPage,
+    meta: { ...inventoryOrdersMeta, title: 'Alertas de pedidos', permission: 'pedidos.read' },
+  },
+  {
+    path: 'inventory-orders/:uuid/revisar',
+    name: 'inventory-orders-review',
+    component: InventoryOrdersNewPage,
+    meta: { ...inventoryOrdersMeta, title: 'Revisar pedido', permission: 'pedidos.create' },
+  },
+  {
+    path: 'inventory-orders/:uuid/recepcion',
+    name: 'inventory-orders-recepcion',
+    component: InventoryOrdersReceptionPage,
+    meta: { ...inventoryOrdersMeta, title: 'Recepción de pedido', permission: 'pedidos.receive' },
+  },
+  {
+    path: 'inventory-orders/:uuid/novedades',
+    name: 'inventory-orders-novedades',
+    component: InventoryOrdersIssuesPage,
+    meta: { ...inventoryOrdersMeta, title: 'Novedades del pedido', permission: 'pedidos.read' },
+  },
+  {
+    path: 'inventory-orders/:uuid/historial',
+    name: 'inventory-orders-historial',
+    component: InventoryOrdersHistoryPage,
+    meta: { ...inventoryOrdersMeta, title: 'Historial del pedido', permission: 'pedidos.read' },
+  },
 ];
 
 const router = createRouter({
@@ -102,12 +160,6 @@ const router = createRouter({
       name: 'login',
       component: LoginPage,
       meta: { title: 'Iniciar Sesion' },
-    },
-    {
-      path: '/diagnostic',
-      name: 'diagnostic',
-      component: DiagnosticPage,
-      meta: { title: 'Diagnóstico' },
     },
     {
       path: '/',
@@ -124,6 +176,11 @@ const router = createRouter({
 function firstAvailablePath(auth) {
   for (const child of shellChildren) {
     if (child.path === '' || child.path === 'notifications') continue;
+    // U8: las rutas con parámetro no son destino de aterrizaje; el flag y el
+    // permiso exacto deben cumplirse para ofrecer una ruta de pedidos.
+    if (child.path.includes(':')) continue;
+    if (child.meta.feature === 'inventoryOrders' && !isInventoryOrdersFeatureEnabled()) continue;
+    if (child.meta.permission && !auth.hasPermission(child.meta.permission)) continue;
     if (!child.meta.modulo || auth.canAccessModule(child.meta.modulo)) {
       return `/${child.path}`;
     }
@@ -159,6 +216,15 @@ router.beforeEach((to) => {
 
   // Bloquear rutas de módulos sin permiso
   if (to.meta.modulo && auth.isAuthenticated && !auth.canAccessModule(to.meta.modulo)) {
+    return { path: firstAvailablePath(auth) };
+  }
+
+  // U8: el flag de pedidos debe estar encendido y el permiso exacto concedido.
+  if (to.meta.feature === 'inventoryOrders' && auth.isAuthenticated && !isInventoryOrdersFeatureEnabled()) {
+    return { path: firstAvailablePath(auth) };
+  }
+
+  if (to.meta.permission && auth.isAuthenticated && !auth.hasPermission(to.meta.permission)) {
     return { path: firstAvailablePath(auth) };
   }
 

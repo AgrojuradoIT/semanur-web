@@ -106,8 +106,11 @@ function statusTone(label) {
 .control-center {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 4px;
+  gap: 10px;
+  padding: 12px 14px;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
 }
 
 .control-center__bar {
@@ -118,6 +121,7 @@ function statusTone(label) {
   background: color-mix(in srgb, var(--surface) 90%, var(--primary) 10%);
   border: 1px solid var(--surface-2);
   border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .control-center__live-badge {
@@ -174,17 +178,18 @@ function statusTone(label) {
   margin: 0;
   padding: 0;
   list-style: none;
+  flex-shrink: 0;
 }
 
 .live-status {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  gap: 6px;
-  padding: 10px 12px;
+  gap: 4px;
+  padding: 8px 10px;
   background: var(--surface);
   border: 1px solid var(--surface-2);
-  border-radius: 10px;
+  border-radius: 8px;
   transition: all 0.2s ease;
 }
 
@@ -212,16 +217,19 @@ function statusTone(label) {
 .live-status--approved .live-status__dot { background: #8b5cf6; }
 
 .live-status__label {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .live-status__count {
   font-family: 'Oswald', sans-serif;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   line-height: 1;
   color: var(--text-main);
 }
@@ -230,12 +238,13 @@ function statusTone(label) {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 2px;
   font-size: 0.65rem;
   font-weight: 800;
   letter-spacing: 0.7px;
   color: var(--text-secondary);
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .control-center__section-title span.material-icons-round {
@@ -244,23 +253,27 @@ function statusTone(label) {
 }
 
 .live-sessions {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .live-session {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  min-block-size: 58px;
-  padding: 10px 14px;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
   background: var(--surface);
   border: 1px solid var(--surface-2);
-  border-radius: 10px;
+  border-radius: 8px;
   color: var(--text-main);
   text-decoration: none;
   transition: all 0.2s ease;
@@ -284,7 +297,7 @@ function statusTone(label) {
 }
 
 .live-session__icon {
-  font-size: 24px;
+  font-size: 22px;
   color: var(--primary);
 }
 
@@ -292,8 +305,8 @@ function statusTone(label) {
   position: absolute;
   bottom: 0;
   right: 0;
-  inline-size: 8px;
-  block-size: 8px;
+  inline-size: 7px;
+  block-size: 7px;
   border-radius: 50%;
   background: #10b981;
   border: 2px solid var(--surface);
@@ -302,41 +315,44 @@ function statusTone(label) {
 .live-session__content {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   min-inline-size: 0;
 }
 
 .live-session__mechanic strong {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .live-session__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .live-session__vehicle-badge {
   display: inline-flex;
   align-items: center;
   gap: 3px;
-  padding: 2px 6px;
+  padding: 1px 5px;
   background: var(--surface-2);
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 800;
   letter-spacing: 0.4px;
   color: var(--primary);
 }
 
 .live-session__vehicle-badge span.material-icons-round {
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .live-session__ot-id {
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   color: var(--text-secondary);
   font-weight: 600;
 }
@@ -344,17 +360,17 @@ function statusTone(label) {
 .live-session__timer {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 3px 6px;
   background: var(--primary-10);
   border-radius: 6px;
   color: var(--primary);
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
 }
 
 .live-session__timer span.material-icons-round {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .live-session__timer--extended {
@@ -365,13 +381,15 @@ function statusTone(label) {
 .live-empty {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 12px;
-  min-block-size: 80px;
+  min-height: 90px;
   padding: 16px;
   background: var(--surface);
   border: 1px dashed var(--surface-2);
   border-radius: 10px;
   color: var(--text-secondary);
+  flex: 1;
 }
 
 .live-empty__icon {
@@ -386,11 +404,11 @@ function statusTone(label) {
 }
 
 .live-empty__text strong {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--text-main);
 }
 
 .live-empty__text span {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
 }
 </style>
